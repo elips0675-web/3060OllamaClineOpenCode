@@ -1,0 +1,10 @@
+# Профиль A: RTX 3060 12 ГБ VRAM (стандартная карта)
+# Модель целиком в VRAM: 9.0 ГБ веса + ~1.1 ГБ KV-кэш (q8) = ~10.1 ГБ из 12.
+# Ожидаемая скорость: 25-35 ток/с генерация, 200-400 ток/с prefill.
+
+FROM qwen2.5-coder:14b
+
+PARAMETER num_ctx 12288
+PARAMETER num_gpu 99
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9

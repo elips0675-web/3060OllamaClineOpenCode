@@ -1,0 +1,66 @@
+{
+  "folders": [
+    {
+      "name": "SwiftMatch — код",
+      "path": "D:/swiftmatch1bdnoutprodpart1"
+    },
+    {
+      "name": "Правила и бэклог (контекст)",
+      "path": "D:/ИИ агент"
+    }
+  ],
+  "settings": {
+    "terminal.integrated.defaultProfile.windows": "Command Prompt",
+    "terminal.integrated.cwd": "${workspaceFolder:SwiftMatch — код}",
+
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/dist/**": true,
+      "**/playwright-report/**": true,
+      "**/test-results/**": true,
+      "**/.git/objects/**": true,
+      "**/android/**/build/**": true,
+      "**/coverage/**": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/playwright-report": true,
+      "**/test-results": true,
+      "**/coverage": true,
+      "**/package-lock.json": true
+    },
+    "files.exclude": {
+      "**/.git": true
+    },
+
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+
+    "editor.formatOnSave": false,
+    "editor.tabSize": 2,
+    "editor.detectIndentation": false,
+    "files.eol": "\n",
+
+    "eslint.validate": [
+      "javascript",
+      "javascriptreact",
+      "typescript",
+      "typescriptreact"
+    ],
+
+    "git.autofetch": false,
+    "git.confirmSync": true,
+
+    "explorer.compactFolders": false,
+    "workbench.startupEditor": "none"
+  },
+  "extensions": {
+    "recommendations": [
+      "saoudrizwan.claude-dev",
+      "Continue.continue",
+      "dbaeumer.vscode-eslint",
+      "bradlc.vscode-tailwindcss"
+    ]
+  }
+}

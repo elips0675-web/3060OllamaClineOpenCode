@@ -1,0 +1,70 @@
+ПАМЯТКА НА ОДНУ СТРАНИЦУ — SwiftMatch + 3060
+Проект: D:\swiftmatch1bdnoutprodpart1   API 3002 · фронт 8081 · MySQL 3306
+Терминал: cmd (в PowerShell — npm.cmd / npx.cmd). Дата: 29.10.2026
+================================================================================
+
+ГДЕ ПИСАТЬ
+  cmd в корне проекта ....... команды проекта (гейты, тесты, сборка)
+  OpenCode .................. /next, /next-cloud, /models, /agents
+  Cline (панель VS Code) .... фраза: Доделай из Что доделать
+  VS Code Ctrl+Shift+B ...... «Следующая задача»
+  Continue .................. ничего, Tab принимает подсказку
+
+ДЕСЯТЬ КОМАНД
+  1. npm.cmd run stage:context            где мы: git, Stage, счётчики, очередь
+  2. npm.cmd run stage:preflight          всё ли зелёное ДО работы
+  3. npm.cmd run task:next -- --local     следующая задача для 3060
+  4. npm.cmd run task:next                следующая по приоритетам (облако)
+  5. npm.cmd run task:next -- --list      таблица всех пунктов со статусами
+  6. npm.cmd run task:next -- --id QA-01  конкретный пункт
+  7. /next  |  /next-cloud                то же внутри OpenCode
+  8. npx.cmd eslint <файл>                линт правленого файла
+  9. npm.cmd run typecheck                типы (any не пропустит)
+ 10. npm.cmd run stage:checkpoint         Stage N.Y + коммит + push
+
+  Перед коммитом, если менял фронт:  npx.cmd vite build
+  Карточку в файл:  task:next -- --local --out tmp\next-task.txt
+  Только маршрут:   task:next -- --route   -> local/cloud + причина
+                    (цитата file:line -> риск-домен -> число файлов)
+
+ЧТО ГДЕ ИСПОЛНЯТЬ
+  3060 (бесплатно, офлайн)   одна правка · один файл · объяснить код
+  Облако (DeepSeek)          >1 файла · SQL/схема · разбор гейтов · ревью
+
+ЭСКАЛАЦИЯ — ОДНО ПРАВИЛО
+  Локальная ошиблась ДВАЖДЫ  ->  /next-cloud
+  Задача шире ОДНОГО файла   ->  /next-cloud
+  Деньги · безопасность · БД ->  /next-cloud
+  Автоперехода «упало -> облако» нет: модель задаёт команда или /models
+
+ЦИКЛ РАБОТЫ
+  stage:context -> stage:preflight -> task:next -> /next -> гейты -> checkpoint
+  Модель не решает, ЧТО делать, и не решает, что «готово».
+
+НЕ ДЕЛАТЬ
+  x npm install / npm ci под живым API (EPERM, поломанное дерево)
+  x auto-approve записи файлов и терминала в Cline на 14B
+  x давать локальной модели «почини весь проект»
+  x отключать правило линтера, чтобы «позеленело»
+  x git reset --hard, git checkout -- <файл>, docker system prune
+  x коммитить .env и ключи
+  x локальной модели git commit/push: коммитит человек (правило 11.1)
+
+ЕСЛИ НЕ РАБОТАЕТ
+  «Брать нечего» ......... все пункты закрыты/заблокированы -> --list
+  Модель думает 5 минут .. не влезла в VRAM: ollama ps, num_ctx 8192
+  Стало 3-5 ток/с ........ в VRAM 14B + 7B: ollama stop swiftmatch-coder-7b
+  Браузер + 14B = тормоза  ОЗУ 16 ГБ: ollama stop swiftmatch-coder-14b (вернёт
+                           и VRAM, и ОЗУ); KEEP_ALIVE 5m вместо 30m из 02
+  Cline: «model not found» . ollama ps, curl localhost:11434/api/tags
+  /next не видна .......... нет .opencode/commands/next.md -> /reload
+  Cline игнорирует фразу .. .clinerules не в корне проекта
+  Continue молчит ......... нет swiftmatch-coder-tiny или файл назван .yml
+  npm не стартует ......... PowerShell: npm.cmd, или открыть cmd
+
+ОРИЕНТИРЫ 3060
+  14B q4 ctx 12288 ........ ~10.1 ГБ VRAM, 25-35 ток/с, ollama ps = 100% GPU
+  1.5B автодополнение ..... ~1 ГБ, живёт рядом с 14B
+  3-5 ток/с ............... модель ушла в ОЗУ: срезать ctx или взять легче
+================================================================================
+Подробно: 01-Как-всё-работает · 07-Автовыбор-задач · 08-Куда-писать-команды

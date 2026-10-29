@@ -1,0 +1,10 @@
+# Профиль C: 7B q8 — быстрый вариант (8 ГБ VRAM) и автодополнение.
+# 7.6 ГБ веса + ~0.5 ГБ KV(q8) на 16k. Скорость: 45-55 ток/с.
+# Годится и для 8 ГБ карт, и как «вторая модель» на 12 ГБ.
+
+FROM qwen2.5-coder:7b-instruct-q8_0
+
+PARAMETER num_ctx 16384
+PARAMETER num_gpu 99
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9

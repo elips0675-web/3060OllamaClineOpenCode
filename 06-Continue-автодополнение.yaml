@@ -1,0 +1,54 @@
+name: swiftmatch-local
+version: 1.0.0
+schema: v1
+
+models:
+  - name: Qwen2.5-Coder 14B (локально, чат и правки)
+    provider: ollama
+    model: swiftmatch-coder-14b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      contextLength: 12288
+      maxTokens: 2048
+
+  - name: Qwen2.5-Coder 1.5B (локально, автодополнение)
+    provider: ollama
+    model: swiftmatch-coder-tiny
+    apiBase: http://localhost:11434
+    roles:
+      - autocomplete
+    defaultCompletionOptions:
+      contextLength: 4096
+      maxTokens: 128
+
+  - name: Qwen2.5-Coder 7B (замена 14B, только когда 14B выгружен)
+    provider: ollama
+    model: swiftmatch-coder-7b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      contextLength: 16384
+      maxTokens: 128
+
+context:
+  - provider: file
+  - provider: code
+  - provider: diff
+  - provider: terminal
+  - provider: problems
+
+tabAutocompleteOptions:
+  debounceDelay: 300
+  maxPromptTokens: 2048
+  multilineCompletions: auto
+
+docs:
+  - name: Правила проекта
+    url: file:///D:/swiftmatch1bdnoutprodpart1/AGENTS.md

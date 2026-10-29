@@ -1,0 +1,10 @@
+# Профиль B: 16 ГБ VRAM (модифицированная 3060 / 4060 Ti 16G)
+# q6_K весит ~12 ГБ + ~1.5 ГБ KV(q8) на 16k контекста = ~13.5 ГБ. Помещается.
+# Качество заметно выше q4. Скорость: 18-26 ток/с.
+
+FROM qwen2.5-coder:14b-instruct-q6_K
+
+PARAMETER num_ctx 16384
+PARAMETER num_gpu 99
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9

@@ -1,0 +1,71 @@
+# SwiftMatch — жёсткие правила для ИИ-агента (Cline / Roo Code)
+
+Проект: React 18 + TS strict + Tailwind v3 + shadcn/ui + Vite (front 8081), Express (API 3002),
+MySQL 3306, Redis (опционально, in-memory fallback), Socket.IO, Capacitor Android.
+Канон правил автора: AGENTS.md + docs/AGENTS-*.md. Бэклог задач: «Что доделать.txt».
+Копия документации для чтения: D:\ИИ агент\test (побайтовые зеркала).
+
+## 1. Работать только из бэклога
+Перед любым действием открой «Что доделать.txt» и возьми задачу по ID (QA-01, COV-02, SRCH-01 …).
+Никакого «рефакторинга заодно», никаких придуманных задач. Одна задача = один микроблок = один коммит.
+Пункт без `file:line` не считается фактом: открывай файл и строку, а не пересказывай.
+
+## 2. Терминал на этой машине: npm.cmd / npx.cmd
+PowerShell блокирует npm.ps1 и npx.ps1 (ExecutionPolicy). Поэтому в PowerShell:
+`npm.cmd run <script>`, `npx.cmd <tool>`.
+В «Command Prompt» и Git Bash обычные `npm` / `npx` работают.
+
+## 3. Зелёный минимум перед словом «готово» (все exit 0)
+1. `npx.cmd eslint <изменённые файлы>`
+2. `npm.cmd run typecheck`
+3. `npm.cmd test -- <путь к затронутому тесту>`
+4. `npm.cmd run check:docs`
+5. `npm.cmd run check:n-plus-one` — если трогал server/src
+6. `npm.cmd run check:enum-constraints` — если трогал SQL/ENUM/CHECK
+7. `npm.cmd run check:prod-mock` — если добавил платную точку
+8. `npx.cmd vite build` — если менял фронт
+Показать вывод команд в отчёте. Не перекладывать починку линтера на пользователя.
+
+## 4. Зеркала test/ — только скриптом
+Проверка: `npm.cmd run check:mirrors`.
+Синхронизация: `node scripts/check-doc-mirrors.mjs --fix`
+ЗАПРЕЩЕНО писать `npm run check:mirrors --fix`: npm съедает `--fix` как свой конфиг
+(«Unknown cli config») и зеркала не обновляются. Правильно: `npm.cmd run check:mirrors -- --fix`.
+Набор зеркал: «Что доделать.txt», README.md, project-context.md, AGENTS.md,
+docs/AGENTS-pitfalls.md, docs/AGENTS-workflow.md, docs/AGENTS-production.md, docs/AGENTS-security.md.
+«Что сделано.txt» живёт только в корне, в test/ его нет.
+
+## 5. Код — запреты
+- `any` запрещён (используй интерфейсы, `unknown` + type guard). `as any` и `// @ts-ignore` — тоже запрет.
+- Комментарии в коде не добавлять.
+- SQL только prepared statements (`??` / `?`), без конкатенации строк.
+- UI-тексты только через `t()`, ключи переводов (не русский текст в разметке, не сырые ключи в БД).
+- Не трогать стили бейджей в admin-content.tsx, порты 3002/8081, гейт adminAuth.
+- Колонка, которую читает код, обязана быть и в database/mysql_schema.sql, и в миграции.
+- CHECK/ENUM из схемы обязан быть проверен в файле, который пишет в таблицу (иначе 500 вместо 400).
+- Feature flag обязателен для нового публичного модуля (feature_flags + /admin/features + i18n ru/en).
+
+## 6. Запрещённые команды без прямого разрешения человека
+`npm ci`, `npm install`, `npm audit fix --force`, `git reset --hard`, `git checkout -- <файл>`,
+`git clean`, `docker system prune`, `docker volume prune`, удаление файлов и папок,
+правка `.env`, правка `test/` руками, `git push --force`.
+
+## 7. Чекпойнт после каждого логического блока
+1. Запись `Stage N.Y` в шапку «Что сделано.txt».
+2. `git add` поимённо (не `git add -A`).
+3. `git commit --no-verify -F <файл с сообщением>` (Conventional Commits: feat/fix/refactor/test/docs).
+4. `git push origin main`.
+5. Перед следующим блоком: `npm.cmd run retent:check` (переход запрещён при окне > 6 файлов / 300 строк).
+Незакоммиченная работа не считается сделанной.
+
+## 8. Порядок работы
+1. Прочитай задачу из «Что доделать.txt».
+2. Найди файлы через grep/search, не читай проект целиком (контекст ограничен).
+3. Минимальная правка по стилю окружающего кода.
+4. Сначала фикс причины, потом тест. Красный тест в коммите «добить потом» — запрещён.
+5. Прогони гейты из п.3, пока не будет зелёно.
+6. Отчёт: что изменено, какие файлы, вывод гейтов.
+
+## 9. Если не уверен — спроси
+Двусмысленность в задаче, конфликт правил, необходимость удалить файл или снять гейт:
+останови работу и задай вопрос человеку. Догадка вместо вопроса = сломанный прод.
