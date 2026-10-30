@@ -37,10 +37,14 @@ echo   [1] 14B q4      ~9.0 GB VRAM  - ВАША КАРТА (3060 12 ГБ). Ре�
 echo   [2] 14B q6     ~12.0 GB VRAM  - только для 16 ГБ VRAM, на 12 ГБ не влезет
 echo   [3] 7B  q8      ~7.6 GB VRAM  - 8 ГБ карты, только ВМЕСТО 14B, не вместе с ним
 echo   [4] 1.5B tiny   ~1.0 GB VRAM  - автодополнение рядом с 14B (можно ставить сразу)
+echo   [5] 7B  q5_K_M  ~5.4 GB VRAM  - легче q8: +2 ГБ запаса VRAM, качество ниже q8
 echo.
 echo  ВАЖНО: OLLAMA_MAX_LOADED_MODELS=2 разрешает держать две модели сразу.
 echo  Годная пара - 14B + 1.5B (~10.1 ГБ). Пара 14B + 7B = ~17.6 ГБ больше 12 ГБ:
 echo  начнётся CPU/GPU split и падение до 3-5 ток/с. Ставьте 7B ВМЕСТО 14B.
+echo.
+echo  q5_K_M - компромисс: если 7B q8 помещается, берите q8; q5 нужен, когда
+echo  рядом должно остаться место браузеру, Docker или 1.5B (~6.5 ГБ вместо 7.6).
 echo.
 echo  Qwen2.5-Coder - модель конца 2024 года. Если в ollama.com/library уже
 echo  есть более свежее семейство coder в размере 14B, берите его тем же
@@ -49,7 +53,7 @@ echo.
 echo   Enter = профиль 1. Скрипт можно запускать несколько раз:
 echo   сначала [1], потом [4] (автодополнение).
 echo.
-set /p choice=Профиль [1-4]: 
+set /p choice=Профиль [1-5]:
 if "%choice%"=="" set "choice=1"
 set "FAILED=0"
 
@@ -57,6 +61,7 @@ if "%choice%"=="1" call :install qwen2.5-coder:14b                 swiftmatch-co
 if "%choice%"=="2" call :install qwen2.5-coder:14b-instruct-q6_K   swiftmatch-coder-14b-hq  Modelfile-14b-q6
 if "%choice%"=="3" call :install qwen2.5-coder:7b-instruct-q8_0    swiftmatch-coder-7b      Modelfile-7b-q8
 if "%choice%"=="4" call :install qwen2.5-coder:1.5b                swiftmatch-coder-tiny    Modelfile-tiny
+if "%choice%"=="5" call :install qwen2.5-coder:7b-instruct-q5_K_M  swiftmatch-coder-7b-q5   Modelfile-7b-q5
 
 if "%FAILED%"=="1" goto fail
 
@@ -70,9 +75,14 @@ echo  2. Проверьте список:  ollama list
 echo  3. Замер скорости:    03-Замер-скорости.bat
 echo  4. Убедитесь, что модель целиком на GPU:  ollama ps
 echo     В колонке PROCESSOR должно быть "100%% GPU".
+echo  5. Переключение Cline+OpenCode одной командой (из корня ПРОЕКТА):
+echo     "%~dp0switch-ai.bat" local      (14B q4, ctx 12288)
+echo     "%~dp0switch-ai.bat" local-q5   (7B q5_K_M, ctx 16384)
+echo     Перед этим закройте VS Code. Подробно - 12-Переключение-моделей.txt.
 echo.
-echo  В Cline: провайдер Ollama, Base URL http://localhost:11434,
-echo  Model ID swiftmatch-coder-14b, Context Window 12288.
+echo  Вручную в Cline: провайдер Ollama, Base URL http://localhost:11434,
+echo  Model ID swiftmatch-coder-14b, Context Window 12288
+echo  (для профиля [5] - Model ID swiftmatch-coder-7b-q5, Context 16384).
 echo  Автодополнение в Continue: Model ID swiftmatch-coder-tiny.
 echo ============================================================
 pause

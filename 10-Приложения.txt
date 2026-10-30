@@ -30,10 +30,12 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
     num_gpu 99         просит уложить все слои в GPU; при нехватке VRAM
                        Ollama сама сделает split и покажет его в ollama ps
 
-  Остальные три профиля отличаются только этими значениями:
+  Остальные четыре профиля отличаются только этими значениями:
     Modelfile-14b-q6    FROM qwen2.5-coder:14b-instruct-q6_K, num_ctx 16384
                         (профиль B: только для 16 ГБ VRAM)
     Modelfile-7b-q8     FROM qwen2.5-coder:7b-instruct-q8_0,  num_ctx 16384
+    Modelfile-7b-q5     FROM qwen2.5-coder:7b-instruct-q5_K_M, num_ctx 16384
+                        (профиль E: 5.4 ГБ веса, ~6.5 ГБ с KV — запас VRAM)
     Modelfile-tiny      FROM qwen2.5-coder:1.5b,             num_ctx 4096
 
   Обратите внимание: у 14B q4 контекст 12288 намеренно меньше, чем у q6 и 7B.
@@ -106,37 +108,75 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
   (persona + AGENTS.md). Если заменить файл целиком на пример из 08, правила
   пропадут, и агент начнёт «улучшать» проект по своему усмотрению.
 
-  Правильный результат после установки моделей Ollama (добавлены три ключа,
-  instructions на месте):
+  Правильный результат после установки моделей Ollama (добавлены model,
+  default_agent, providers и agents; instructions на месте):
 
       {
         "$schema": "https://opencode.ai/config.json",
         "instructions": [".opencode/persona.md", "AGENTS.md"],
-        "model": "ollama/swiftmatch-coder-14b",
+        "model": "ollama/swiftmatch-coder-14b:latest",
         "default_agent": "local",
-        "agent": {
+        "providers": {
+          "ollama": {
+            "models": {
+              "swiftmatch-coder-14b:latest": {
+                "name": "swiftmatch-coder 14B q4 · ctx 12k",
+                "limit": { "context": 12288, "output": 4096 },
+                "capabilities": {
+                  "tools": true,
+                  "input": ["text"],
+                  "output": ["text"]
+                }
+              },
+              "swiftmatch-coder-7b-q5:latest": {
+                "name": "swiftmatch-coder 7B q5_K_M · ctx 16k",
+                "limit": { "context": 16384, "output": 4096 },
+                "capabilities": {
+                  "tools": true,
+                  "input": ["text"],
+                  "output": ["text"]
+                }
+              },
+              "gpt-oss:120b-cloud": {
+                "name": "gpt-oss:120b-cloud · Ollama Cloud",
+                "limit": { "context": 131072, "output": 16384 },
+                "capabilities": {
+                  "tools": true,
+                  "input": ["text"],
+                  "output": ["text"]
+                }
+              }
+            }
+          }
+        },
+        "agents": {
           "local": {
             "description": "Основная работа на 3060: один файл, узкая правка",
             "mode": "primary",
-            "model": "ollama/swiftmatch-coder-14b",
             "steps": 10,
-            "permission": {
-              "webfetch": "deny",
-              "websearch": "deny"
-            }
+            "permissions": [
+              { "action": "webfetch", "resource": "*", "effect": "deny" },
+              { "action": "websearch", "resource": "*", "effect": "deny" }
+            ]
           },
           "cloud": {
             "description": "Эскалация: многофайловые задачи, ревью, миграции",
             "mode": "primary",
-            "model": "<ID вашей облачной модели из /models>"
+            "model": "opencode/deepseek-v4.1-flash-free"
           }
         }
       }
 
-  Порядок: сначала в /models посмотреть точный ID облачной модели, вписать его
-  вместо <ID ...>, затем перезапустить opencode (конфиг читается при старте;
-  команды /reload в TUI нет). Не угадывать ID: при неверном имени OpenCode
-  либо не стартует, либо молча подставляет другую модель.
+  Порядок: сначала в /models посмотреть точный ID модели, вписать его вместо
+  примера, затем проверить, что OpenCode стартует. ID не угадывать: при
+  неверном имени OpenCode либо не стартует, либо молча подставляет другую
+  модель. Второй способ — не писать руками, а выполнить
+  "…\switch-ai.bat" local|cloud: скрипт смержит эти ключи с текущим файлом
+  (instructions сохранит) и оставит бэкап opencode.json.bak-<дата>.
+
+  Ключи — OpenCode V2: providers, agents, permissions (множественное число).
+  Старые provider / agent / permission V2 ещё читает, но они помечены
+  устаревшими. Форматы внутри одного агента не смешивать.
 
   Откат: сохранить копию opencode.json перед правкой (opencode.json.bak) —
   это два ключа, восстановить вручную дело одной минуты.

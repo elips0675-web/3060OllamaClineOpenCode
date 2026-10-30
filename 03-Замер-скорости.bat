@@ -20,11 +20,16 @@ echo.
 echo  Выгружаю 14B из VRAM, чтобы 7B не легла поверх неё (14B + 7B = 17.6 ГБ > 12).
 ollama stop swiftmatch-coder-14b >nul 2>nul
 call :bench swiftmatch-coder-7b
+echo.
+echo  Выгружаю 7B q8: 7B q8 + 7B q5 = ~14 ГБ > 12.
+ollama stop swiftmatch-coder-7b >nul 2>nul
+call :bench swiftmatch-coder-7b-q5
 
 echo ============================================================
 echo  Как читать результат
 echo ============================================================
 echo  eval rate 25-35 ток/с  - 14B q4 нормально работает на 3060
+echo  eval rate 40-55 ток/с  - 7B q5/q8 нормально, если ollama ps = 100%% GPU
 echo  eval rate 3-5 ток/с    - модель НЕ влезла в VRAM, ушла на CPU
 echo  eval rate 200+ ток/с   - это закешированный/короткий ответ, не показатель
 echo.

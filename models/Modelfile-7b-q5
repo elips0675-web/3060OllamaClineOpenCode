@@ -1,0 +1,11 @@
+# Профиль E: 7B q5_K_M — лёгкий агент (5.4 ГБ весов).
+# 5.4 ГБ веса + ~0.5 ГБ KV(q8) на 16k ≈ 6.5 ГБ. Скорость: ~40-50 ток/с.
+# Компромисс: заметно легче q8 (7.6 ГБ), качество ниже q8, но выше q4_K_M.
+# Ставить ВМЕСТО 14B, если нужен запас VRAM под браузер, Docker или 1.5B.
+
+FROM qwen2.5-coder:7b-instruct-q5_K_M
+
+PARAMETER num_ctx 16384
+PARAMETER num_gpu 99
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9

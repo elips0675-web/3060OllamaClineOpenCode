@@ -131,7 +131,7 @@
     .opencode/commands/next.md и next-cloud.md (команды /next, /next-cloud);
     .vscode/tasks.json — 7 задач, Ctrl+Shift+B;
     .clinerules — правила для Cline, включая фразу-триггер;
-    комплект: 00-11, 4 Modelfile, workspace, .clinerules (копия проектного),
+    комплект: 00-12, 5 Modelfile, workspace, .clinerules (копия проектного),
     scripts/ (снимок селектора + тесты), package.json, README.
 
   Не готово на машине без GPU/моделей (например на ноутбуке):
@@ -142,10 +142,13 @@
 
   Что сделать на домашнем ПК:
     1) 02-Установить-локально.bat -> профиль [1] (14B q4, ctx 12288),
-       затем ещё раз -> [4] (1.5B для автодополнения);
+       затем ещё раз -> [4] (1.5B для автодополнения); нужен запас VRAM —
+       [5] (7B q5_K_M, ~6.5 ГБ);
     2) 03-Замер-скорости.bat -> 25-35 ток/с, ollama ps -> «100% GPU»;
-    3) вставить блок agent в opencode.json (раздел 3.2 файла 08);
-    4) добавить в команды /next и /next-cloud строки agent и model;
+    3) закрыть VS Code и из корня проекта выполнить switch-ai.bat local
+       (или local-q5, cloud): скрипт сам пропишет opencode.json и Cline
+       (12-Переключение-моделей.txt). Ручной путь — блок 3.2 файла 08;
+    4) при желании добавить в команды /next и /next-cloud строки agent и model;
     5) проверить: npm.cmd run task:next -- --local, затем /next.
 
 

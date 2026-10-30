@@ -45,6 +45,12 @@
       Конфиг и файлы команд читаются при старте: после правки opencode.json
       или добавления .opencode/commands/*.md перезапустите opencode.
 
+      Модель по умолчанию для ВСЕХ новых сессий переключается скриптом
+      (Cline + OpenCode сразу), см. 12-Переключение-моделей.txt:
+          "…\switch-ai.bat" local
+          "…\switch-ai.bat" cloud
+      Уже открытая сессия модель не меняет: /models или новая сессия.
+
       /local и /cloud «из коробки» НЕ существуют: это свои команды, два файла
       в .opencode/commands/ (как их создать — п.3.3). Пока файлов нет,
       OpenCode на такую строку отвечает «команда не найдена».
@@ -55,7 +61,11 @@
       Провайдер и модель — шестерёнка в панели Cline:
           локально:  Provider = Ollama, Base URL = http://localhost:11434,
                      Model = swiftmatch-coder-14b, Context = 12288
-          облако:    Provider = DeepSeek (или OpenRouter), свой API-ключ
+          облако:    Provider = Ollama, Model = gpt-oss:120b-cloud
+                     (после ollama signin), либо DeepSeek/OpenRouter с ключом
+      Проще не кликать вручную, а закрыть VS Code и выполнить
+      "…\switch-ai.bat" local|cloud — скрипт пропишет эти же поля сам
+      (12-Переключение-моделей.txt).
       Авто-одобрение: только read_file / search_files / list_files.
       Запись файлов и терминал — подтверждать руками, пока не убедитесь,
       что 14B не «фантазирует» правки.
@@ -134,23 +144,37 @@
       {
         "$schema": "https://opencode.ai/config.json",
         "instructions": [".opencode/persona.md", "AGENTS.md"],
-        "model": "ollama/swiftmatch-coder-14b",
+        "model": "ollama/swiftmatch-coder-14b:latest",
         "default_agent": "local",
-        "agent": {
+        "providers": {
+          "ollama": {
+            "models": {
+              "swiftmatch-coder-14b:latest": {
+                "name": "swiftmatch-coder 14B q4 · ctx 12k",
+                "limit": { "context": 12288, "output": 4096 },
+                "capabilities": {
+                  "tools": true,
+                  "input": ["text"],
+                  "output": ["text"]
+                }
+              }
+            }
+          }
+        },
+        "agents": {
           "local": {
             "description": "Основная работа на 3060: один файл, узкая правка",
             "mode": "primary",
-            "model": "ollama/swiftmatch-coder-14b",
             "steps": 10,
-            "permission": {
-              "webfetch": "deny",
-              "websearch": "deny"
-            }
+            "permissions": [
+              { "action": "webfetch", "resource": "*", "effect": "deny" },
+              { "action": "websearch", "resource": "*", "effect": "deny" }
+            ]
           },
           "cloud": {
             "description": "Эскалация: многофайловые задачи, ревью, миграции",
             "mode": "primary",
-            "model": "deepseek/deepseek-chat"
+            "model": "opencode/deepseek-v4.1-flash-free"
           }
         }
       }
@@ -160,15 +184,19 @@
         default_agent    = какой агент стартует (local);
         steps: 10        = предохранитель от зацикливания 14B (поле steps;
                            устаревшее maxSteps не использовать);
-        permission       = объект «инструмент: allow|ask|deny» (не массив
-                           правил); webfetch/websearch deny — локальная модель
-                           не ходит в интернет;
+        permissions      = упорядоченный массив правил action/resource/effect
+                           (форма V2; старый объект permission ещё читается,
+                           но помечен устаревшим);
+        providers.ollama.models = описания сборок: контекст и поддержка
+                           инструментов; облачные -cloud теги сюда же;
         cloud            = тот же OpenCode, но на облачной модели.
 
-      Ключи именно такие (сверено с документацией 29.10.2026): agent, а не
-      agents; permission, а не permissions. Ошибка в имени ключа не роняет
-      OpenCode — он просто молча игнорирует блок, и агент остаётся с
-      настройками по умолчанию.
+      Ключи именно такие (сверено с OpenCode V2, 30.10.2026): providers, agents,
+      permissions — множественное число. Старые provider / agent / permission
+      V2 ещё принимает, но в новых файлах их не используем и не смешиваем
+      форматы внутри одного агента. Ошибка в имени ключа не роняет OpenCode —
+      он просто молча игнорирует блок, и агент остаётся с настройками по
+      умолчанию.
 
       Имя облачной модели подставьте своё — то, что реально подключено у вас
       (посмотрите /models). Если модель не найдена, OpenCode берёт ближайшую
@@ -180,7 +208,7 @@
         ---
         description: Выполнить задачу на локальной модели (3060)
         agent: local
-        model: ollama/swiftmatch-coder-14b
+        model: ollama/swiftmatch-coder-14b:latest
         ---
         $ARGUMENTS
 
@@ -188,7 +216,7 @@
         ---
         description: Эскалация в облако
         agent: cloud
-        model: <ID облачной модели из /models>
+        model: opencode/deepseek-v4.1-flash-free
         ---
         $ARGUMENTS
 
@@ -201,7 +229,7 @@
       повторяемый (п.3.6).
 
   3.4 Если облако нужно не агентом, а одной задачей из терминала:
-        opencode run --model deepseek/deepseek-chat "<карточка>"
+        opencode run --model opencode/deepseek-v4.1-flash-free "<карточка>"
       Флаг --model для run документирован; наличие --agent проверяйте через
       opencode run --help (выдумывать не буду).
 
@@ -235,7 +263,7 @@
            выбирают задачу, а модель берут из сессии. Чтобы маршрут стал
            жёстким, добавьте строку model (ID — из /models) в шапку файла.
 
-        2. model у агента (opencode.json, блок agent)
+        2. model у агента (opencode.json, блок agents:
            Работает, когда у команды своей строки model нет.
 
         3. /models — модель текущей сессии, вручную
@@ -250,7 +278,8 @@
           править файлы, оба видят один и тот же проект;
         • НА ЧЁМ считать — локальная модель Ollama на 3060 или облачная.
           OpenCode прекрасно работает на локальной Ollama (он сам её находит,
-          см. ниже), а Cline можно направить в облако ключом DeepSeek.
+          см. ниже), а Cline можно направить в Ollama Cloud (gpt-oss:120b-cloud
+          после ollama signin) или в DeepSeek/OpenRouter по ключу.
       Скрипт next-task.mjs отвечает только на второй вопрос (local/cloud) и
       печатает это в строке «Маршрут»; чем исполнять — решает человек.
 
@@ -314,8 +343,8 @@
   Важно про 3060: команды /next и /next-cloud сейчас без полей agent/model —
   работают на той модели, что выбрана в сессии. После установки моделей Ollama
   добавьте в frontmatter две строки:
-      /next:        agent: local     model: ollama/swiftmatch-coder-14b
-      /next-cloud:  agent: cloud
+      /next:        agent: local     model: ollama/swiftmatch-coder-14b:latest
+      /next-cloud:  agent: cloud     model: opencode/deepseek-v4.1-flash-free
 
 
 5. ПОРЯДОК ПЕРВОГО ДНЯ НА ДОМАШНЕМ ПК
@@ -331,7 +360,10 @@
    7) VS Code + расширения (Cline, Continue, ESLint, Tailwind).
    8) Открыть swiftmatch-3060.code-workspace.
    9) Скопировать .clinerules в корень проекта.
-  10) Вставить блок 3.2 в opencode.json, создать два файла из 3.3.
+  10) Вместо ручной вставки блока 3.2 и файлов 3.3: закрыть VS Code, из корня
+      проекта выполнить switch-ai.bat local (или local-q5) — скрипт сам
+      смержит opencode.json и настроит Cline (см. 12-Переключение-моделей.txt).
+      Ручной путь оставьте, если нужно понять, что именно меняется.
   11) Проверка связки: открыть cmd в проекте, выполнить
           npm.cmd run stage:context
           npm.cmd run task:next -- --local
@@ -361,6 +393,14 @@
        npm.cmd run task:next -- --local
        npm.cmd run task:next -- --out tmp\next-task.txt
        opencode
+
+   переключение модели сразу в Cline и OpenCode
+       "…\switch-ai.bat" status
+       "…\switch-ai.bat" local       14B q4, офлайн
+       "…\switch-ai.bat" local-q5    7B q5_K_M, запас VRAM
+       "…\switch-ai.bat" cloud       облако
+       (перед Cline закрыть VS Code; в OpenCode — /models или новая сессия)
+       подробно — 12-Переключение-моделей.txt
 
    внутри OpenCode
        /next                следующая задача (узкая, для 3060)
