@@ -28,6 +28,12 @@ models\Modelfile-tiny            профиль D: 1.5B, автодополне�
 13-Анализ-проекта.txt            разбор проекта по фактам: бриф, карточка, цитаты
 templates\analysis-card.md       шаблон итога анализа (факты + file:line)
 templates\analysis-rules.md      блок правил для проектного .clinerules
+templates\agent-protocol.md      цикл шага, бюджет, стоп-правила для .clinerules
+templates\verify-checklist.md    проверка до/после правки
+templates\workflows\             5 процедур для .clinerules/workflows
+templates\cline_docs\            Memory Bank проекта (5 файлов)
+evals\tasks.json                 10 задач с бинарным критерием
+evals\README.md                  как гонять эвалы и что считается провалом
 switch-ai.bat                    запуск переключателя из корня проекта
 scripts\next-task.mjs            снимок селектора задач из проекта (597 строк)
 scripts\next-task.test.mjs       46 тестов селектора (vitest)
@@ -37,6 +43,8 @@ scripts\project-brief.mjs        сборщик фактов о проекте (
 scripts\project-brief.test.mjs   19 тестов сборщика (vitest)
 scripts\backlog.mjs              механизм бэклога: ID, close/open, сверка с журналом
 scripts\backlog.test.mjs         19 тестов механизма бэклога (vitest)
+scripts\agent-eval.mjs           эвалы: список задач, запись, счёт, порог
+scripts\agent-eval.test.mjs      20 тестов эвалов (vitest)
 package.json                     команды тестов и гейтов бэклога
 README.md                        краткое описание репозитория на GitHub
 swiftmatch-3060.code-workspace   рабочее пространство VS Code + настройки
@@ -162,6 +170,15 @@ swiftmatch-3060.code-workspace   рабочее пространство VS Code
         npm.cmd run check:backlog
         npm.cmd run backlog:close -- --id BLK-01 --ref "раздел «BLK-01»"
     Правила — в конце «Что доделать.txt».
+
+14. Агентный контур: протокол шага (templates/agent-protocol.md) копируется в
+    проектный .clinerules, workflows — в .clinerules/workflows, Memory Bank — в
+    cline_docs. После каждой правки правил снимайте балл на 10 задачах:
+        npm.cmd run eval:list
+        npm.cmd run eval:record -- --id E-01 --pass --steps 4 --fabricated 0
+        npm.cmd run eval:score -- --strict
+    Порог: pass >= 7/10, выдумано 0, среднее шагов <= 6. Ниже — править правила
+    по фактам провалов, а не браться за LoRA. Подробно — evals/README.md.
 
 
 ЧЕСТНЫЕ ОГРАНИЧЕНИЯ 14B НА 3060

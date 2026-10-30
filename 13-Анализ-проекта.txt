@@ -9,6 +9,10 @@
 
 Три части: сборщик фактов (scripts/project-brief.mjs), карточка анализа
 (templates/analysis-card.md) и правила для проекта (templates/analysis-rules.md).
+Дальше по кругу работает агентный контур: цикл шага — templates/agent-protocol.md,
+процедуры — templates/workflows (brief/fix/test/review/refactor), память —
+templates/cline_docs, проверка — templates/verify-checklist.md, измеримость —
+evals/tasks.json + scripts/agent-eval.mjs. Раздел 9 — как этим пользоваться.
 
 
 --------------------------------------------------------------------------------
@@ -242,6 +246,16 @@ build, out, coverage, .next, .cache, tmp, vendor, .venv, __pycache__ и т.п.
      двух цитат руками.
   4) Если модель снова скатывается в шаблон — сократить число файлов до 2-3,
      а не увеличивать контекст.
+  5) Агентный контур кладётся рядом:
+       templates/agent-protocol.md  -> блок цикла в .clinerules проекта;
+       templates/workflows/*.md     -> .clinerules/workflows/ (вызов /brief.md);
+       templates/cline_docs/*.md    -> cline_docs/ (Memory Bank);
+       templates/verify-checklist.md -> проверка до/после правки.
+     Цикл: RESTATE -> MAP -> PLAN -> ACT -> VERIFY -> REPORT; <=2 поиска,
+     <=6 чтений, 1 правка на шаг. Две неудачи подряд -> стоп и облако.
+  6) Измеримость: 10 задач из evals/tasks.json, бинарный pass/fail,
+     запись через scripts/agent-eval.mjs. Порог — 7/10, выдумано 0,
+     среднее шагов <= 6. Пока порог не взят, LoRA не нужна: правятся правила.
 
   .clinerules в комплекте — копия проектного. Правки делаются в проекте; в
   комплект переносится обновлённая копия, чтобы не было двух расходящихся
@@ -282,6 +296,8 @@ build, out, coverage, .next, .cache, tmp, vendor, .venv, __pycache__ и т.п.
   .clinerules                правила Cline (копия проектного)
   templates/analysis-card.md шаблон итога анализа
   templates/analysis-rules.md блок правил для проектного .clinerules
+  templates/agent-protocol.md цикл шага, бюджет, стоп-правила
+  templates/workflows/       пять процедур: brief, fix, test, review, refactor
 
 ================================================================================
 Итог: сначала карта (бриф), потом 3-6 файлов целиком, потом карточка с file:line.
