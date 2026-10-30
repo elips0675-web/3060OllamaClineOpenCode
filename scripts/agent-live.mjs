@@ -29,6 +29,11 @@ export const AUTO_SKIP = {
   'E-06': 'нужен git diff: у скрипта нет shell-инструмента, задача для Cline/облака',
 }
 export const READ_ONLY_TASKS = ['E-01', 'E-02', 'E-03', 'E-07', 'E-08', 'E-09', 'E-10']
+
+// Доказательство — только исходный код. Документация, отчёты прогонов, логи и
+// дампы БД фиксируют результат, а не поведение кода.
+const FORBIDDEN_EVIDENCE =
+  /\.md$|(?:^|\/)vitest-[^/]*\.json$|(?:^|\/)(?:coverage|playwright-report|test-analysis|logs|backups)\//u
 export const SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'coverage', 'playwright-report',
   'test-results', '.next', '.cache', 'tmp', 'logs',
@@ -116,6 +121,9 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines }) {
   const text = String(answer || '')
   if (parseTextCalls(text).length > 0) {
     return { pass: false, reason: 'ответ — вызов инструмента, а не вывод' }
+  }
+  if (task.id !== 'E-07' && citations.some((item) => FORBIDDEN_EVIDENCE.test(item.resolved || item.path))) {
+    return { pass: false, reason: 'цитата из документации/отчёта, а не из кода' }
   }
   if (task.id === 'E-07' && /не найдено|нет дубл/iu.test(text)) {
     const named = /[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|json|md|sql|prisma)/u.test(text)
@@ -269,6 +277,13 @@ export function initialMessages(task, root) {
         'search_files ищет по одной строке: шаблон с `{...}` или `[^)]*` на несколько',
         'строк ничего не найдёт. Пустой поиск — повод упростить шаблон до одного',
         'слова, а не повод отвечать «не найдено».',
+        'Две пустые выдачи подряд — меняй слово или расширение, а не повторяй шаблон.',
+        'Точка входа — файл, который реально запускается: смотри scripts в package.json',
+        'и server.listen/app.listen, а не первое совпадение `main`.',
+        'Утверждение «X зависит от Y» подтверждай чтением X (импорт, скрипт, конфиг),',
+        'а не догадкой по имени файла.',
+        'Если пишешь «не найдено», перечисли проверенные файлы и что именно искал.',
+        'Факты о схеме БД бери из `.prisma` или `.sql`; `.md` — не доказательство.',
         'Если задача шире 6 файлов или задевает деньги/доступы/БД — остановись',
         'и предложи облако. Это правильный ответ, а не провал.',
         `Корень проекта: ${root}`,

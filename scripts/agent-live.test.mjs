@@ -186,6 +186,16 @@ describe('вердикт', () => {
     expect(autoVerdict(task, deps).pass).toBe(true)
   })
 
+  it('отчёт тестов и документация — не доказательство', () => {
+    const okAnswer = { ...ok }
+    expect(
+      autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'server/vitest-server.json', ok: true }] }).reason,
+    ).toMatch(/документации\/отчёта/)
+    expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'PLAYBOOK.md', ok: true }] }).reason).toMatch(/документации/)
+    expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'backups/db.sql', ok: true }] }).reason).toMatch(/документации/)
+    expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'src/app.ts', ok: true }] }).pass).toBe(true)
+  })
+
   it('ответ «не найдено» с цитатами — противоречие', () => {
     const answer = 'Точка входа приложения не найдена. ' + 'Факт: server/src/index.js:56. '.repeat(6)
     expect(autoVerdict(TASK, { ...ok, answer }).reason).toMatch(/противоречие/)

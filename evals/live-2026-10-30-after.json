@@ -8,7 +8,7 @@
       "id": "E-01",
       "title": "Точка входа и старт",
       "pass": false,
-      "reason": "нет ключевого факта: server/src/index.js",
+      "reason": "цитата из документации/отчёта, а не из кода",
       "steps": 3,
       "citations": 4,
       "fabricated": 0,
@@ -122,7 +122,7 @@
       "id": "E-09",
       "title": "Вопрос по БД без правок",
       "pass": false,
-      "reason": "нет ключевого факта: database/migrations/ | server/prisma/schema.prisma",
+      "reason": "цитата из документации/отчёта, а не из кода",
       "steps": 2,
       "citations": 6,
       "fabricated": 0,
@@ -194,5 +194,5 @@
       ]
     }
   ],
-  "rescoredAt": "2026-10-30T06:33:41.090Z"
+  "rescoredAt": "2026-10-30T06:37:33.910Z"
 }
