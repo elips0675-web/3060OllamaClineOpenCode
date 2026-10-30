@@ -1,5 +1,6 @@
 # служебное и локальное
 tmp/
+node_modules/
 *.log
 *.bak
 *.tmp

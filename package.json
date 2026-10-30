@@ -1,0 +1,13 @@
+{
+  "name": "3060-ollama-cline-opencode",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline coding-agent kit for RTX 3060: task selection and local/cloud route (snapshot of SwiftMatch scripts)",
+  "scripts": {
+    "test:next": "vitest run scripts/next-task.test.mjs"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.6"
+  }
+}
