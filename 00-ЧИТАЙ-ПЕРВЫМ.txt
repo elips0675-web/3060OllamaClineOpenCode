@@ -35,7 +35,9 @@ scripts\ai-profile.mjs           переключатель профилей (op
 scripts\ai-profile.test.mjs      22 теста переключателя (vitest)
 scripts\project-brief.mjs        сборщик фактов о проекте (бриф ~5 КБ)
 scripts\project-brief.test.mjs   19 тестов сборщика (vitest)
-package.json                     команды тестов: test:next, test:ai, test:brief
+scripts\backlog.mjs              механизм бэклога: ID, close/open, сверка с журналом
+scripts\backlog.test.mjs         19 тестов механизма бэклога (vitest)
+package.json                     команды тестов и гейтов бэклога
 README.md                        краткое описание репозитория на GitHub
 swiftmatch-3060.code-workspace   рабочее пространство VS Code + настройки
 .clinerules                      копия проектного: правила для Cline
@@ -153,6 +155,13 @@ swiftmatch-3060.code-workspace   рабочее пространство VS Code
     3-6 файлов целиком и цитировать file:line. Итог — карточка
     templates/analysis-card.md; правила — templates/analysis-rules.md.
     Подробно — 13-Анализ-проекта.txt.
+
+13. Бэклог и журнал живут по механизму проекта: открытый пункт — с ID и датой
+    проверки, закрытый уходит в «Что сделано.txt», в бэклоге остаётся одна
+    строка ✅. Проверка и закрытие:
+        npm.cmd run check:backlog
+        npm.cmd run backlog:close -- --id BLK-01 --ref "раздел «BLK-01»"
+    Правила — в конце «Что доделать.txt».
 
 
 ЧЕСТНЫЕ ОГРАНИЧЕНИЯ 14B НА 3060
