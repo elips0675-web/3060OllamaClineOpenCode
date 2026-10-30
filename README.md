@@ -36,6 +36,7 @@
 | `templates/workflows/*.md` | 6 процедур для `.clinerules/workflows/` |
 | `templates/cline_docs/*.md` | Memory Bank: 5 файлов для `cline_docs/` проекта |
 | `evals/tasks.json` | 10 задач с бинарным критерием и ожидаемым маршрутом |
+| `evals/manual-run.md` | лист ручного прогона 10 задач в Cline: подготовка, проверка, запись |
 | `models/Modelfile-*` | свои сборки под 12 ГБ: 14B q4/q6, 7B q8/q5_K_M, 1.5B |
 | `.clinerules` | правила для Cline (копия проектного): триггер, эскалация, «коммитит человек» |
 | `switch-ai.bat` | запуск переключателя из корня проекта (Cline + OpenCode) |

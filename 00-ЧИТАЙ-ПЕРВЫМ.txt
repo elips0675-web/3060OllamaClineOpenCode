@@ -30,10 +30,11 @@ templates\analysis-card.md       шаблон итога анализа (фак�
 templates\analysis-rules.md      блок правил для проектного .clinerules
 templates\agent-protocol.md      цикл шага, бюджет, стоп-правила для .clinerules
 templates\verify-checklist.md    проверка до/после правки
-templates\workflows\             5 процедур для .clinerules/workflows
+templates\workflows\             6 процедур для .clinerules/workflows
 templates\cline_docs\            Memory Bank проекта (5 файлов)
 evals\tasks.json                 10 задач с бинарным критерием
 evals\README.md                  как гонять эвалы и что считается провалом
+evals\manual-run.md              лист ручного прогона 10 задач в Cline
 switch-ai.bat                    запуск переключателя из корня проекта
 scripts\next-task.mjs            селектор задач (заголовки и таблицы с ID)
 scripts\next-task.test.mjs       51 тест селектора (vitest)
