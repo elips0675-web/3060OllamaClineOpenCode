@@ -44,7 +44,7 @@
 | `scripts/backlog.mjs` | механизм бэклога: ID, статусы, close/open, сверка с журналом |
 | `scripts/backlog.test.mjs` | 19 тестов механизма: канон, «надгробия», даты, CLI |
 | `scripts/agent-eval.mjs` | эвалы агента: список задач, запись прогонов, счёт |
-| `scripts/agent-eval.test.mjs` | 20 тестов эвалов: порог, последний прогон, CLI |
+| `scripts/agent-eval.test.mjs` | 23 теста эвалов: промпты, порог, последний прогон, CLI |
 | `package.json` | скрипты тестов и гейтов бэклога (`vitest`, `check:backlog`) |
 | `swiftmatch-3060.code-workspace` | рабочее пространство VS Code |
 | `Что сделано.txt` / `Что доделать.txt` | журнал и открытые пункты комплекта |
@@ -192,6 +192,7 @@ cline_docs/progress.md         что сделано / сломано / не п�
 
 ```
 npm.cmd run eval:list
+npm.cmd run eval:prompt -- --id E-01
 npm.cmd run eval:record -- --id E-01 --pass --steps 4 --fabricated 0 --note "цитаты рабочие"
 npm.cmd run eval:score -- --strict
 ```
@@ -225,7 +226,7 @@ node scripts/next-task.mjs --id AI-02 --route
 ```
 
 Тесты (46 у селектора + 22 у переключателя + 19 у сборщика + 19 у бэклога +
-20 у эвалов = 126) запускаются здесь же:
+23 у эвалов = 129) запускаются здесь же:
 
 ```
 npm.cmd install

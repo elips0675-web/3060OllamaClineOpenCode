@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
   THRESHOLDS,
+  formatPrompt,
   formatScore,
   loadResults,
   loadTasks,
@@ -38,6 +39,22 @@ describe('задачи', () => {
       expect(['local', 'cloud']).toContain(task.route)
       expect(task.criterion.length).toBeGreaterThan(20)
     }
+  })
+
+  it('у каждой задачи есть готовый промпт без заглушек', () => {
+    for (const task of TASKS) {
+      expect(task.prompt.length).toBeGreaterThan(60)
+      expect(task.prompt).not.toMatch(/TODO|\.\.\.|<файл>|<ID>/u)
+    }
+  })
+
+  it('formatPrompt печатает задачу, критерий и правила', () => {
+    const text = formatPrompt(TASKS[0])
+    expect(text).toContain('E-01')
+    expect(text).toContain(TASKS[0].title)
+    expect(text).toContain('Критерий pass:')
+    expect(text).toContain('file:line')
+    expect(text).toContain('Не проверено')
   })
 })
 
@@ -158,6 +175,16 @@ describe('CLI', () => {
     expect(result.stdout).toContain('E-10')
   })
 
+  it('prompt печатает готовый промпт, ошибки — 1/2', () => {
+    const ok = exec(['prompt', '--id', 'E-01'])
+    expect(ok.status).toBe(0)
+    expect(ok.stdout).toContain('E-01')
+    expect(ok.stdout).toContain('Критерий pass:')
+
+    expect(exec(['prompt', '--id', 'E-99']).status).toBe(1)
+    expect(exec(['prompt']).status).toBe(2)
+  })
+
   it('record пишет результат, score его видит', () => {
     const record = exec([
       'record',
@@ -227,8 +254,8 @@ describe('битые файлы', () => {
       writeFileSync(
         file,
         JSON.stringify([
-          { id: 'E-01', title: 'a', route: 'local', criterion: 'x'.repeat(30) },
-          { id: 'E-01', title: 'b', route: 'local', criterion: 'x'.repeat(30) },
+          { id: 'E-01', title: 'a', route: 'local', criterion: 'x'.repeat(30), prompt: 'y'.repeat(80) },
+          { id: 'E-01', title: 'b', route: 'local', criterion: 'x'.repeat(30), prompt: 'y'.repeat(80) },
         ]),
         'utf8',
       )

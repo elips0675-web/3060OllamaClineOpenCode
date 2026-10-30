@@ -57,6 +57,7 @@
   процедуры — templates/workflows (копировать в .clinerules/workflows),
   память — templates/cline_docs (копировать в cline_docs проекта).
   npm.cmd run eval:list               10 задач с критерием pass/fail
+  npm.cmd run eval:prompt -- --id E-01  готовый промпт задачи (копировать в Cline)
   npm.cmd run eval:record -- --id E-01 --pass --steps 4 --fabricated 0
   npm.cmd run eval:score -- --strict  порог: 7/10, выдумано 0, шагов <=6
 

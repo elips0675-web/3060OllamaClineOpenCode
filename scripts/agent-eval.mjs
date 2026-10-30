@@ -37,6 +37,9 @@ export function loadTasks(file = DEFAULT_TASKS) {
       throw new Error(`задача без ID формата E-NN в ${file}`)
     }
     if (seen.has(task.id)) throw new Error(`дубль ID ${task.id} в ${file}`)
+    if (typeof task.prompt !== 'string' || task.prompt.trim().length < 20) {
+      throw new Error(`у задачи ${task.id} нет промпта (prompt) в ${file}`)
+    }
     seen.add(task.id)
   }
   return tasks
@@ -107,6 +110,24 @@ export function scoreRuns(data, tasks) {
   }
 }
 
+export function formatPrompt(task) {
+  return [
+    `# ${task.id} — ${task.title}`,
+    `Маршрут: ${task.route}`,
+    `Критерий pass: ${task.criterion}`,
+    '',
+    task.prompt,
+    '',
+    'Правила ответа:',
+    '- цикл RESTATE → MAP → PLAN → ACT → VERIFY → REPORT;',
+    '- не больше 5 прочитанных файлов и одного изменения;',
+    '- каждый факт — с file:line и короткой цитатой;',
+    '- если задача шире 6 файлов или задевает деньги/доступы/БД — остановись',
+    '  и предложи облако (это тоже правильный ответ);',
+    '- в конце — «Не проверено» и один следующий шаг.',
+  ].join('\n')
+}
+
 export function formatScore(score) {
   const lines = ['ID    задача                          попыток  итог   шаги  выдумано']
   for (const row of score.rows) {
@@ -155,6 +176,7 @@ function usage() {
   return `Эвалы агента: 10 задач.
 
   node scripts/agent-eval.mjs list [--tasks <файл>]
+  node scripts/agent-eval.mjs prompt --id E-01 [--tasks <файл>]
   node scripts/agent-eval.mjs record --id E-01 (--pass|--fail) [--steps N] [--fabricated N] [--note "..."] [--results <файл>]
   node scripts/agent-eval.mjs score [--strict] [--tasks <файл>] [--results <файл>]
 
@@ -177,7 +199,7 @@ function main(argv) {
     console.log(usage())
     return args.mode ? 0 : 2
   }
-  if (!['list', 'record', 'score'].includes(args.mode)) {
+  if (!['list', 'prompt', 'record', 'score'].includes(args.mode)) {
     console.error(`✗ неизвестная команда: ${args.mode}`)
     console.error(usage())
     return 2
@@ -198,6 +220,20 @@ function main(argv) {
     for (const task of tasks) {
       console.log(`${task.id}\t${task.route.padEnd(5)}\t${task.title}`)
     }
+    return 0
+  }
+
+  if (args.mode === 'prompt') {
+    if (!args.values.id) {
+      console.error('✗ --id обязателен (например --id E-01)')
+      return 2
+    }
+    const task = tasks.find((item) => item.id === args.values.id)
+    if (!task) {
+      console.error(`✗ неизвестная задача: ${args.values.id}`)
+      return 1
+    }
+    console.log(formatPrompt(task))
     return 0
   }
 

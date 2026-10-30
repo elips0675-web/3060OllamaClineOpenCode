@@ -13,19 +13,31 @@
 
 1. Возьмите реальный проект и его бриф:
    `node scripts/project-brief.mjs --root <проект>`.
-2. По одной задаче из списка дайте агенту вопрос в новой сессии.
-3. Оцените по критерию: **pass** или **fail**. Сомнение = fail.
-4. Запишите результат:
+2. Откройте новую сессию Cline (или другой обвязки) на локальной модели.
+3. Получите готовый промпт задачи и вставьте его в сессию:
+   `npm.cmd run eval:prompt -- --id E-01`
+4. Оцените по критерию: **pass** или **fail**. Сомнение = fail.
+5. Запишите результат:
 
 ```bat
-node scripts/agent-eval.mjs list
-node scripts/agent-eval.mjs record --id E-01 --pass --steps 4 --fabricated 0 --note "цитаты рабочие"
-node scripts/agent-eval.mjs record --id E-02 --fail --steps 9 --fabricated 2 --note "придумал роут"
-node scripts/agent-eval.mjs score
+npm.cmd run eval:list
+npm.cmd run eval:prompt -- --id E-01
+npm.cmd run eval:record -- --id E-01 --pass --steps 4 --fabricated 0 --note "цитаты рабочие"
+npm.cmd run eval:record -- --id E-02 --fail --steps 9 --fabricated 2 --note "придумал роут"
+npm.cmd run eval:score
 ```
 
 `--steps` — сколько шагов/правок сделал агент, `--fabricated` — сколько
 несуществующих файлов/функций/полей он назвал.
+
+## Порядок прогона (20–30 минут)
+
+- E-01…E-03, E-09 — только чтение, без правок: сначала они, они быстрее.
+- E-04, E-05 — правки в одном файле: проверьте diff и точечный тест.
+- E-06…E-08, E-10 — облако или отказ: без них нельзя считать контур готовым.
+
+Правило честности: если агент сослался на файл, откройте строку руками.
+Одна непроверенная цитата = fail, даже если остальной ответ хорош.
 
 ## Порог «агент готов»
 

@@ -15,6 +15,7 @@
     "backlog:open": "node scripts/backlog.mjs open",
     "backlog:close": "node scripts/backlog.mjs close",
     "eval:list": "node scripts/agent-eval.mjs list",
+    "eval:prompt": "node scripts/agent-eval.mjs prompt",
     "eval:record": "node scripts/agent-eval.mjs record",
     "eval:score": "node scripts/agent-eval.mjs score"
   },

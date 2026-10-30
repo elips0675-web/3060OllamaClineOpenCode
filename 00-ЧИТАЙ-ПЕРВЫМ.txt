@@ -44,7 +44,7 @@ scripts\project-brief.test.mjs   19 тестов сборщика (vitest)
 scripts\backlog.mjs              механизм бэклога: ID, close/open, сверка с журналом
 scripts\backlog.test.mjs         19 тестов механизма бэклога (vitest)
 scripts\agent-eval.mjs           эвалы: список задач, запись, счёт, порог
-scripts\agent-eval.test.mjs      20 тестов эвалов (vitest)
+scripts\agent-eval.test.mjs      23 теста эвалов (vitest)
 package.json                     команды тестов и гейтов бэклога
 README.md                        краткое описание репозитория на GitHub
 swiftmatch-3060.code-workspace   рабочее пространство VS Code + настройки
@@ -175,6 +175,7 @@ swiftmatch-3060.code-workspace   рабочее пространство VS Code
     проектный .clinerules, workflows — в .clinerules/workflows, Memory Bank — в
     cline_docs. После каждой правки правил снимайте балл на 10 задачах:
         npm.cmd run eval:list
+        npm.cmd run eval:prompt -- --id E-01
         npm.cmd run eval:record -- --id E-01 --pass --steps 4 --fabricated 0
         npm.cmd run eval:score -- --strict
     Порог: pass >= 7/10, выдумано 0, среднее шагов <= 6. Ниже — править правила
