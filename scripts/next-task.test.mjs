@@ -200,6 +200,51 @@ describe('parseBacklog', () => {
   })
 })
 
+describe('табличный бэклог', () => {
+  const TABLE = [
+    '# Бэклог',
+    '',
+    '## 🟡 Открытые (P1)',
+    '',
+    '| ID | Проблема | Факт | Решение | Статус |',
+    '|---|----------|------|---------|--------|',
+    '| P1-08 | **Secrets** | `server/src/email.js:13` | env | ⏳ (проверено 23.10.2026) |',
+    '| P1-09 | **Settings** | - | - | ⏳ (проверено 09.10.2026) |',
+    '| E2E-02 | **Закрытая** | `e2e/a.spec.ts:5` | - | ✅ 09.10.2026 |',
+    '',
+    '### BU-01 — Заголовочный пункт',
+    'Факт: `README.md:1`',
+    'Статус: ⏳ (проверено 30.10.2026)',
+  ].join('\n')
+
+  const items = parseBacklog(TABLE)
+
+  it('читает строки таблицы с ID-колонкой вместе с заголовками', () => {
+    expect(items.map((item) => item.id)).toEqual(['P1-08', 'P1-09', 'E2E-02', 'BU-01'])
+  })
+
+  it('берёт заголовок из второй колонки и цитату из остальных', () => {
+    const p108 = byId(items, 'P1-08')
+    expect(p108.title).toBe('Secrets')
+    expect(p108.evidence).toBe('file:line')
+    expect(p108.files[0].path).toBe('server/src/email.js')
+    expect(p108.files[0].lines).toBe('13')
+    expect(p108.priority).toBe(1)
+    expect(p108.status).toBe('ready')
+  })
+
+  it('пустая колонка «Факт» даёт no-evidence, а ✅-дата — closed', () => {
+    expect(byId(items, 'P1-09').evidence).toBe('none')
+    expect(byId(items, 'P1-09').status).toBe('no-evidence')
+    expect(byId(items, 'E2E-02').status).toBe('closed')
+  })
+
+  it('не принимает шапку и разделитель таблицы за пункты', () => {
+    expect(items.some((item) => /^ID$/u.test(item.id))).toBe(false)
+    expect(items.every((item) => /^[A-Z][A-Z0-9]{1,7}-\d{2}$/u.test(item.id))).toBe(true)
+  })
+})
+
 describe('pickTask', () => {
   const items = parseBacklog(FIXTURE)
 
@@ -314,6 +359,17 @@ describe('routeFor', () => {
     expect(route.target).toBe('cloud')
     expect(route.reason).toBe('no-citation')
     expect(route.text).toContain('нет цитаты file:line')
+  })
+
+  it('больше 6 файлов — облако, даже если цитаты есть', () => {
+    const many = Array.from({ length: 7 }, (_, index) => ({ path: `src/f${index}.ts`, lines: '1' }))
+    const route = routeFor({ ...byId(items, 'QA-01'), files: many })
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('too-many-files')
+    expect(route.text).toContain('7 файлов')
+
+    const six = many.slice(0, 6)
+    expect(routeFor({ ...byId(items, 'QA-01'), files: six }).target).toBe('local')
   })
 
   it('платежи и деньги уходят в облако даже на одном файле', () => {

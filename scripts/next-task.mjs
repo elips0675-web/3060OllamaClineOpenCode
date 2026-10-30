@@ -10,7 +10,7 @@ const BLOCKED_SECTION = /Ждёт действий пользователя/u
 const QUEUE_SECTION = /Очередь этапов/u
 const BLOCKED_ID = [/^(ENV|AND|LEGAL|CI)-\d{2}$/u]
 const OWNER_BLOCK = /решение владельца|зависит от владельца|ждёт владельца|ждет владельца|живыми ключами|живой прогон с ключами|после ENV-0\d/iu
-const CLOSED_ITEM = /закрыт\s+Stage|закрыт\s+\d{2}\.\d{2}\.\d{4}|\(закрыт/iu
+const CLOSED_ITEM = /закрыт\s+Stage|закрыт\s+\d{2}\.\d{2}\.\d{4}|\(закрыт|✅\s*\d{2}\.\d{2}\.\d{4}/iu
 const ACCEPTED_DECISION = /риск принят|решено оставить|решение зафиксировано|осознанное ограничение/iu
 
 const ITEM_ID = /\b([A-Z][A-Z0-9]{1,7}-\d{2})\b/u
@@ -186,8 +186,7 @@ export function parseBacklog(text) {
 
       const bulletMatch = line.match(/^[-*]\s+\*\*([A-Z][A-Z0-9]{1,7}-\d{2})\b/u)
       const numberedMatch = line.match(/^(\d+)\.\s+(.+)$/u)
-      if (bulletMatch) {
-        const bodyLines = [line]
+      if (bulletMatch) {        const bodyLines = [line]
         for (let next = index + 1; next < section.lines.length; next += 1) {
           const candidate = section.lines[next]
           if (/^\s+\S/u.test(candidate)) {
@@ -198,6 +197,23 @@ export function parseBacklog(text) {
         }
         order += 1
         items.push(itemFrom(bulletMatch[1], line, bodyLines.join('\n'), {
+          section: sub || section.heading,
+          priority: effectivePriority(meta, subMeta, sub),
+          order,
+          line: lineNo,
+          queue: Boolean(meta.queue),
+          blocked: Boolean(meta.blocked) || Boolean(subMeta.blocked),
+        }))
+        continue
+      }
+
+      const tableMatch = line.match(/^\|\s*([A-Z][A-Z0-9]{1,7}-\d{2})\s*\|(.*)$/u)
+      if (tableMatch) {
+        const cells = line.split('|').slice(1, -1).map((cell) => cell.trim())
+        const title = cleanTitle(cells[1] || '')
+        const body = cells.slice(1).join(' | ')
+        order += 1
+        items.push(itemFrom(tableMatch[1], title, body, {
           section: sub || section.heading,
           priority: effectivePriority(meta, subMeta, sub),
           order,
@@ -390,6 +406,13 @@ export function routeFor(item) {
   }
   if (count <= 1) {
     return { target: 'local', reason: 'single-file', text: '3060: один файл, один подход' }
+  }
+  if (count > 6) {
+    return {
+      target: 'cloud',
+      reason: 'too-many-files',
+      text: `облако: ${count} файлов — локальный бюджет 1–6; сузить до одного файла`,
+    }
   }
   return {
     target: 'local',
