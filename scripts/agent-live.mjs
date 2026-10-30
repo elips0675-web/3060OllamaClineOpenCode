@@ -30,16 +30,23 @@ export const AUTO_SKIP = {
 }
 export const READ_ONLY_TASKS = ['E-01', 'E-02', 'E-03', 'E-07', 'E-08', 'E-09', 'E-10']
 
-// Доказательство — только исходный код. Документация, отчёты прогонов, логи и
-// дампы БД фиксируют результат, а не поведение кода.
+// Доказательство — только исходный код. Документация, журналы, отчёты прогонов,
+// логи и дампы БД фиксируют результат, а не поведение кода.
 const FORBIDDEN_EVIDENCE =
-  /\.md$|(?:^|\/)vitest-[^/]*\.json$|(?:^|\/)(?:coverage|playwright-report|test-analysis|logs|backups)\//u
+  /\.(?:md|txt)$|(?:^|\/)vitest-[^/]*\.json$|(?:^|\/)(?:coverage|playwright-report|test-analysis|logs|backups)\//u
+
+// Что нельзя даже открывать: отчёты, дампы и журналы. Это не запрет на чтение
+// кода, а защита от подмены: модель иначе примет прошлый прогон за поведение.
+const NON_SOURCE =
+  /(?:^|\/)(?:coverage|playwright-report|test-analysis|logs|backups)\/|vitest-[^/]*\.json$|(?:^|\/)(?:Что сделано|Что[- ]доделать|context)\.txt$/u
 export const SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'coverage', 'playwright-report',
   'test-results', '.next', '.cache', 'tmp', 'logs',
 ])
 
-const CODE_EXT = /\.(?:tsx?|jsx?|mjs|cjs|js|sql|prisma|json|ya?ml|css|md|txt)$/u
+// Документация и журналы (.md/.txt) в поиск не попадают: агент не должен
+// принимать прошлые отчёты за факты о коде. read_file их по-прежнему откроет.
+const CODE_EXT = /\.(?:tsx?|jsx?|mjs|cjs|js|sql|prisma|json|ya?ml|css)$/u
 
 export function parseArgs(argv) {
   const out = { flags: new Set(), values: {} }
@@ -117,7 +124,32 @@ export function checkCitations(root, citations, io = {}) {
   }
 }
 
-export function autoVerdict(task, { answer, citations, fabricated, badLines }) {
+function schemaFacts(root, citations) {
+  const fields = new Set()
+  const models = new Set()
+  const files = [...new Set(
+    citations
+      .filter((item) => item.ok && /\.(?:prisma|sql)$/u.test(item.resolved || item.path))
+      .map((item) => item.resolved || item.path),
+  )]
+  for (const rel of files) {
+    const full = path.resolve(root, rel)
+    if (!existsSync(full)) continue
+    for (const line of readFileSync(full, 'utf8').split(/\r?\n/u)) {
+      const model = /^\s*(?:model|CREATE TABLE)\s+`?(\w+)`?/iu.exec(line)
+      if (model) {
+        models.add(model[1])
+        continue
+      }
+      if (/^\s*(?:@@|--|\/\/)/u.test(line)) continue
+      const field = /^\s{2,}(\w+)\s+\w+/u.exec(line)
+      if (field) fields.add(field[1])
+    }
+  }
+  return { fields, models, files }
+}
+
+export function autoVerdict(task, { answer, citations, fabricated, badLines, root }) {
   const text = String(answer || '')
   if (parseTextCalls(text).length > 0) {
     return { pass: false, reason: 'ответ — вызов инструмента, а не вывод' }
@@ -126,6 +158,9 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines }) {
     return { pass: false, reason: 'цитата из документации/отчёта, а не из кода' }
   }
   if (task.id === 'E-07' && /не найдено|нет дубл/iu.test(text)) {
+    if (/(?:^|[\s(`])(?:backups|coverage|logs|test-analysis|playwright-report)\/|vitest-[^\s`]*\.json|\.md\b|\.txt\b/iu.test(text)) {
+      return { pass: false, reason: '«не найдено» подтверждено отчётами/дампами, а не кодом' }
+    }
     const named = /[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|json|md|sql|prisma)/u.test(text)
     return named
       ? { pass: true, reason: 'честное «не найдено» с указанием файлов' }
@@ -139,6 +174,13 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines }) {
       : { pass: false, reason: 'не отказался от широкой задачи' }
   }
   if (citations.length === 0) return { pass: false, reason: 'нет цитат file:line' }
+  if (task.id === 'E-07') {
+    const isTest = (file) => /(?:^|\/)(?:__tests__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)
+    const real = citations.filter((item) => item.ok && !isTest(item.resolved || item.path))
+    if (real.length < 2) {
+      return { pass: false, reason: 'дубль подтверждён тестами, а не двумя местами кода' }
+    }
+  }
   if (fabricated > 0) return { pass: false, reason: `выдуманные файлы: ${fabricated}` }
   if (badLines > 0) return { pass: false, reason: `строки вне файла: ${badLines}` }
   const head = text.trim().slice(0, 160)
@@ -170,6 +212,17 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines }) {
     }
     if (!citations.some((item) => /\.(?:sql|prisma)$/u.test(item.resolved || item.path))) {
       return { pass: false, reason: 'цитаты не из схемы или миграции' }
+    }
+    if (root) {
+      const { fields, models, files } = schemaFacts(root, citations)
+      if (files.length) {
+        const named = [...text.matchAll(/`([A-Za-z_]\w*)`/gu)]
+          .map((match) => match[1])
+          .filter((token) => fields.has(token) && !models.has(token))
+        if (named.length < 2) {
+          return { pass: false, reason: 'не названы поля модели: нужно ≥2 поля из схемы' }
+        }
+      }
     }
   }
   return { pass: true, reason: 'цитаты существуют' }
@@ -213,6 +266,9 @@ export function toolDefinitions() {
 
 export function readFileTool(root, args) {
   const file = safeResolve(root, args.path)
+  if (NON_SOURCE.test(path.relative(path.resolve(root), file).replace(/\\/g, '/'))) {
+    throw new Error(`не источник фактов: ${args.path}. Читай исходники и схему (.prisma/.sql из database/), а не отчёты, дампы и журналы`)
+  }
   if (!existsSync(file) || !statSync(file).isFile()) throw new Error(`нет файла: ${args.path}`)
   const all = readFileSync(file, 'utf8').split(/\r?\n/u)
   const start = Math.max(1, Number(args.start) || 1)
@@ -231,17 +287,35 @@ function walk(root, dir, depth = 0) {
     if (SKIP_DIRS.has(entry.name)) continue
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) out.push(...walk(root, full, depth + 1))
-    else if (CODE_EXT.test(entry.name)) out.push(full)
+    else if (CODE_EXT.test(entry.name) && !/^vitest-[^/]*\.json$/u.test(entry.name)) out.push(full)
   }
   return out
 }
 
-export function searchTool(root, args) {
+export function searchTool(root, args, state = { patterns: [], empty: 0 }) {
+  let pattern = String(args.pattern)
+  const key = `${pattern}|${String(args.glob || '').trim()}`
+  const repeated = state.patterns.includes(key)
+  state.patterns.push(key)
+  // Модель часто ищет путь как текст — таких строк в коде нет. Если это
+  // существующий файл, ищем ссылки по его имени: так видно зависимости.
+  let pathHint = ''
+  if (/[/\\]/u.test(pattern) && /\.\w+$/u.test(pattern)) {
+    try {
+      const candidate = safeResolve(root, pattern)
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        pathHint = `«${pattern}» — путь, а не текст. Ищу ссылки по имени ${path.basename(candidate)}.\n`
+        pattern = path.basename(candidate).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+      }
+    } catch {
+      // путь вне корня — ищем как обычный текст
+    }
+  }
   let re
   try {
-    re = new RegExp(String(args.pattern), 'iu')
+    re = new RegExp(pattern, 'iu')
   } catch {
-    re = new RegExp(String(args.pattern).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu')
+    re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu')
   }
   const rawGlob = String(args.glob || '').trim()
   const extName = rawGlob.replace(/^\*?\.?/u, '')
@@ -254,13 +328,22 @@ export function searchTool(root, args) {
     for (let index = 0; index < rows.length; index += 1) {
       if (re.test(rows[index])) {
         hits.push(`${path.relative(root, file).replace(/\\/g, '/')}:${index + 1}: ${rows[index].trim().slice(0, 160)}`)
-        if (hits.length >= 40) return hits.join('\n')
+        if (hits.length >= 40) break
       }
     }
+    if (hits.length >= 40) break
   }
-  return hits.length
-    ? hits.join('\n')
-    : 'Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности).'
+  const repeatHint = repeated ? 'Повтор шаблона: выдача та же. Смени слово или расширение.\n' : ''
+  if (hits.length) {
+    state.empty = 0
+    return pathHint + repeatHint + hits.join('\n')
+  }
+  state.empty += 1
+  const emptyHint = state.empty >= 2
+    ? 'Две пустые выдачи подряд. Смени слово или расширение, не повторяй шаблон. '
+    : ''
+  return pathHint + emptyHint +
+    'Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности).'
 }
 
 export function initialMessages(task, root) {
@@ -268,27 +351,29 @@ export function initialMessages(task, root) {
     {
       role: 'system',
       content: [
-        'Ты — локальный ИИ-агент для работы с кодом. Отвечай по-русски, коротко.',
-        'Перед утверждением прочитай файл инструментом read_file. Не угадывай.',
-        'Каждый факт в финальном ответе — с цитатой `path:line`.',
-        'Источник фактов — только исходный код. Отчёты тестов (*.json, coverage),',
-        'логи, playwright-report и test-analysis/ доказательством не являются.',
-        'Цитируй только пути и строки, которые реально вернул инструмент.',
-        'search_files ищет по одной строке: шаблон с `{...}` или `[^)]*` на несколько',
-        'строк ничего не найдёт. Пустой поиск — повод упростить шаблон до одного',
-        'слова, а не повод отвечать «не найдено».',
-        'Две пустые выдачи подряд — меняй слово или расширение, а не повторяй шаблон.',
-        'Точка входа — файл, который реально запускается: смотри scripts в package.json',
-        'и server.listen/app.listen, а не первое совпадение `main`.',
-        'Утверждение «X зависит от Y» подтверждай чтением X (импорт, скрипт, конфиг),',
-        'а не догадкой по имени файла.',
-        'Если пишешь «не найдено», перечисли проверенные файлы и что именно искал.',
-        'Факты о схеме БД бери из `.prisma` или `.sql`; `.md` — не доказательство.',
-        'Если задача шире 6 файлов или задевает деньги/доступы/БД — остановись',
-        'и предложи облако. Это правильный ответ, а не провал.',
-        `Корень проекта: ${root}`,
-        'Когда фактов достаточно — дай финальный ответ без вызова инструментов:',
-        'вывод, факты с file:line, что не проверено.',
+        'Ты — локальный ИИ-агент по коду. По-русски, коротко.',
+        '',
+        'ЦИКЛ',
+        '1. Найди факт инструментом: search_files, затем read_file. Не угадывай.',
+        '2. В финале каждый факт — `path:line` из выдачи инструмента.',
+        '3. Нет фактов — перечисли проверенные файлы, а не отвечай «не найдено».',
+        '',
+        'ЗАПРЕТЫ',
+        '- Цитировать и открывать .md, .txt, отчёты, coverage/, logs/, backups/.',
+        '- Называть файл, функцию или поле, которых не видел в выводе инструмента.',
+        '- Писать вызов инструмента вместо вывода.',
+        '- Утверждать «X зависит от Y» без чтения X.',
+        '',
+        'ПОИСК',
+        '- Одна строка на шаблон: без `{...}`, `[^)]*`, `.*`.',
+        '- Две пустые выдачи — смени слово или расширение.',
+        '- Ссылки на файл ищи по имени (index.js), а не по полному пути.',
+        '- Точка входа — то, что запускается: scripts в package.json, server.listen.',
+        '- Схема БД — .prisma или .sql.',
+        '',
+        'Если задача > 6 файлов или деньги/доступы/БД — откажись, предложи облако.',
+        `Корень: ${root}`,
+        'Формат: вывод, факты с file:line, что не проверено.',
       ].join('\n'),
     },
     {
@@ -378,6 +463,7 @@ export async function runTask(task, options) {
   const { root, host, model, maxCalls, timeoutMs } = options
   const messages = initialMessages(task, root)
   const toolDefs = toolDefinitions()
+  const searchState = { patterns: [], empty: 0 }
   let toolCalls = 0
   const trace = []
 
@@ -415,7 +501,7 @@ export async function runTask(task, options) {
         result = name === 'read_file'
           ? readFileTool(root, args)
           : name === 'search_files'
-            ? searchTool(root, args)
+            ? searchTool(root, args, searchState)
             : `Неизвестный инструмент: ${name}`
       } catch (err) {
         result = `Ошибка: ${err.message}`
@@ -427,12 +513,13 @@ export async function runTask(task, options) {
   }
 }
 
-export function summarize(task, result, check) {
+export function summarize(task, result, check, root) {
   const verdict = autoVerdict(task, {
     answer: result.answer,
     citations: check.checked,
     fabricated: check.fabricated,
     badLines: check.badLines,
+    root,
   })
   return {
     id: task.id,
@@ -471,7 +558,7 @@ export function rescoreRows(payload, root, tasks) {
     const task = tasks.find((item) => item.id === row.id)
     if (!task) return row
     const check = checkCitations(root, citationsOf(row.answer))
-    return summarize(task, { answer: row.answer, toolCalls: Math.max(0, row.steps - 1), trace: row.trace || [] }, check)
+    return summarize(task, { answer: row.answer, toolCalls: Math.max(0, row.steps - 1), trace: row.trace || [] }, check, root)
   })
 }
 
@@ -558,7 +645,7 @@ async function main(argv) {
     try {
       const result = await runTask(task, options)
       const check = checkCitations(root, citationsOf(result.answer))
-      const row = summarize(task, result, check)
+      const row = summarize(task, result, check, root)
       rows.push(row)
       process.stderr.write(`  ${row.pass ? 'PASS' : 'FAIL'}: ${row.reason}\n`)
     } catch (err) {

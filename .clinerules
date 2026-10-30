@@ -130,6 +130,8 @@ docs/AGENTS-pitfalls.md, docs/AGENTS-workflow.md, docs/AGENTS-production.md, doc
   догадкой по имени файла.
 - «Не найдено» без списка проверенных файлов — не ответ.
 - Факты о схеме БД — из `.prisma` или `.sql`; `.md` доказательством не является.
+- Журналы (`Что сделано.txt`, `Что доделать.txt`), `context.txt`, отчёты
+  `vitest-*.json`, `coverage/`, `test-analysis/` — не источник фактов о коде.
 
 Полный протокол — `templates/agent-protocol.md`. Процедуры (`brief`, `fix`,
 `test`, `review`, `refactor`) — `templates/workflows/`; в проекте они лежат в

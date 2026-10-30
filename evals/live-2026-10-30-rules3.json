@@ -1,0 +1,152 @@
+{
+  "generatedAt": "2026-10-30T07:13:39.958Z",
+  "model": "qwen2.5-coder-16k:latest",
+  "root": "E:\\Tickets Cursor nout\\repo",
+  "kind": "auto-readonly",
+  "rows": [
+    {
+      "id": "E-01",
+      "title": "Точка входа и старт",
+      "pass": true,
+      "reason": "цитаты существуют",
+      "steps": 3,
+      "citations": 4,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "**Факты:**\n1. `index.js:2`: `import knexLib from 'knex'`\n2. `index.js:30`: `const PORT = process.env.PORT || 4000`\n3. `index.js:56`: `server.listen(PORT, () => {`\n\n**Не проверено:**\n- package.json\n- другие файлы в корне проекта",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "server.listen"
+          },
+          "result": "server/src/api.test.js:11: server.listen(4001)\nserver/src/index.js:56: server.listen(PORT, () => {\nserver/src/__tests__/admin-settings-ops-guard.test.js:10: server.listen(4009)\nserver/src/__tests__/admin-settings-secrets.test.js:17: server.listen(4008)\nserver/src/__tests__/admin-sla-settings.test.js"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/src/index.js",
+            "start": 1,
+            "end": 56
+          },
+          "result": "server/src/index.js (строки 1-56 из 79)\n1: import 'dotenv/config'\n2: import knexLib from 'knex'\n3: import knexConfig from '../knexfile.js'\n4: import { server } from './app.js'\n5: import { setupSocket } from './socket.js'\n6: import { initTelegram } from './telegram.js'\n7: import logger from './logger"
+        }
+      ]
+    },
+    {
+      "id": "E-07",
+      "title": "Дубль бизнес-правила",
+      "pass": false,
+      "reason": "дубль подтверждён тестами, а не двумя местами кода",
+      "steps": 4,
+      "citations": 2,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "Факты:\n1. `scripts/check-backlog-schema.mjs:62`: `if (lineCount > MAX_LINES) problems.push(`объём: ${lineCount} строк (лимит ${MAX_LINES})`)`\n2. `scripts/check-backlog-schema.test.mjs:89`: `it(`строк больше ${MAX_LINES} → проблема`, () => {`\n\nОба места содержат бизнес-правило о лимите объёма.\n\nРасхождение грозит тем, что если одно из правил изменится, а другое — нет, может возникнуть несоответствие в проверках и ограничениях.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "валидация|лимит|статус"
+          },
+          "result": "backups/servicedesk_20261030_080337.sql:239: INSERT INTO `chat_messages` VALUES (1,1,1,'Алексей Петров','Коллеги, напоминаю о собрании в 15:00','2026-07-02 11:00:00',NULL,NULL,NULL,'text',NULL),(2,1,2,'Мар\nbackups/servicedesk_20261030_080337.sql:582: INSERT INTO `feature_flags` VALUES ('chat_message"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "scripts/check-backlog-schema.mjs",
+            "start": 62,
+            "end": 63
+          },
+          "result": "scripts/check-backlog-schema.mjs (строки 62-63 из 156)\n62:   if (lineCount > MAX_LINES) problems.push(`объём: ${lineCount} строк (лимит ${MAX_LINES})`)\n63:   if (bytes > MAX_BYTES) problems.push(`объём: ${bytes} байт (лимит ${MAX_BYTES})`)"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "scripts/check-backlog-schema.test.mjs",
+            "start": 88,
+            "end": 89
+          },
+          "result": "scripts/check-backlog-schema.test.mjs (строки 88-89 из 210)\n88: describe('лимит объёма', () => {\n89:   it(`строк больше ${MAX_LINES} → проблема`, () => {"
+        }
+      ]
+    },
+    {
+      "id": "E-08",
+      "title": "Что сломается при удалении файла",
+      "pass": false,
+      "reason": "цитата из документации/отчёта, а не из кода",
+      "steps": 4,
+      "citations": 28,
+      "fabricated": 2,
+      "badLines": 0,
+      "answer": "Факты:\n- `package-lock.json:9646`: `\"msw\": \"cli/index.js\"`\n- `playwright.config.ts:25`: `command: 'cd server && node src/index.js',`\n- `scripts/ci-check-console.mjs:7`: `//   2. поднимает server (cwd=server, src/index.js → 4000) и vite (cwd=root, 5173);`\n- `scripts/ci-check-console.mjs:80`: `const api = spawn('node', ['src/index.js'], { cwd: SERVER_DIR, stdio: 'inherit' })`\n- `server/package-lock.json:5018`: `\"prisma\": \"build/index.js\"`\n- `server/package.json:10`: `\"start\": \"node src/index.js\",`\n- `server/package.json:11`: `\"dev\": \"node --watch-path=src src/index.js\",`\n- `server/render.yaml:6`: `startCommand: node src/index.js`\n- `server/src/middleware.js:14`: `// в проде старт не пройдёт (index.js FATAL-проверка), здесь verify сам упадёт на ''.`\n- `server/src/__tests__/index.test.js:1`: `// Этап 68: index.js — 0% → тест стартапа, миграций, graceful shutdown.`\n- `server/src/__tests__/index.test.js:50`: `describe('index.js — старт и graceful shutdown (Этап 68)', () => {`\n- `server/src/__tests__/index.test.js:56`: `await import('../index.js')`\n- `test-analysis/server-package.json:10`: `\"start\": \"node src/index.js\",`\n- `test-analysis/server-package.json:11`: `\"dev\": \"node --watch src/index.js\",`\n\nЧто не проверено:\n- Нет других файлов, которые могут зависеть от `index.js`.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "require\\s*\\(['\"]server/src/index\\.js['\"]\\)"
+          },
+          "result": "Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности)."
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "server/src/index\\.js"
+          },
+          "result": "Две пустые выдачи подряд. Смени слово или расширение, не повторяй шаблон. Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности)."
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "index\\.js"
+          },
+          "result": "package-lock.json:9646: \"msw\": \"cli/index.js\"\nplaywright.config.ts:25: command: 'cd server && node src/index.js',\nscripts/ci-check-console.mjs:7: //   2. поднимает server (cwd=server, src/index.js → 4000) и vite (cwd=root, 5173);\nscripts/ci-check-console.mjs:80: const api = spawn('node', ['src/index"
+        }
+      ]
+    },
+    {
+      "id": "E-09",
+      "title": "Вопрос по БД без правок",
+      "pass": false,
+      "reason": "не названы поля модели: нужно ≥2 поля из схемы",
+      "steps": 5,
+      "citations": 4,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "Факты:\n- `employees` table: server/prisma/schema.prisma:11\n- `tickets` table: server/prisma/schema.prisma:63\n- `custom_field_definitions` table: server/prisma/schema.prisma:113\n- `custom_field_values` table: server/prisma/schema.prisma:128\n\nЧто не проверено:\n- Остальные таблицы из списка.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "table|model"
+          },
+          "result": "backups/servicedesk_20261030_080337.sql:19: -- Table structure for table `admin_settings`\nbackups/servicedesk_20261030_080337.sql:22: DROP TABLE IF EXISTS `admin_settings`;\nbackups/servicedesk_20261030_080337.sql:25: CREATE TABLE `admin_settings` (\nbackups/servicedesk_20261030_080337.sql:36: -- Dump"
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "table|model"
+          },
+          "result": "Повтор шаблона: выдача та же. Смени слово или расширение.\nbackups/servicedesk_20261030_080337.sql:19: -- Table structure for table `admin_settings`\nbackups/servicedesk_20261030_080337.sql:22: DROP TABLE IF EXISTS `admin_settings`;\nbackups/servicedesk_20261030_080337.sql:25: CREATE TABLE `admin_setti"
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "table|model",
+            "glob": "*.prisma"
+          },
+          "result": "server/prisma/schema.prisma:11: model employees {\nserver/prisma/schema.prisma:63: model tickets {\nserver/prisma/schema.prisma:113: model custom_field_definitions {\nserver/prisma/schema.prisma:128: model custom_field_values {\nserver/prisma/schema.prisma:143: model time_entries {\nserver/prisma/schema."
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/prisma/schema.prisma"
+          },
+          "result": "server/prisma/schema.prisma (строки 1-200 из 748)\n1: generator client {\n2:   provider = \"prisma-client-js\"\n3: }\n4: \n5: datasource db {\n6:   provider   = \"mysql\"\n7:   url        = env(\"DATABASE_URL\")\n8:   directUrl  = env(\"DIRECT_DATABASE_URL\")\n9: }\n10: \n11: model employees {\n12:   id             Int"
+        }
+      ]
+    }
+  ],
+  "rescoredAt": "2026-10-30T07:15:17.329Z"
+}

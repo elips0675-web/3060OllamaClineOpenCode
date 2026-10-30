@@ -157,12 +157,19 @@ describe('вердикт', () => {
     const bare = { answer: 'Не найдено. Проверил файлы с упоминаниями.', citations: [], fabricated: 0, badLines: 0 }
     expect(autoVerdict(task, bare).reason).toMatch(/без указания/)
     const named = {
-      answer: 'Не найдено: проверил server/src/app.js, server/src/routes/tickets.js и AGENTS.md, дубля нет.',
+      answer: 'Не найдено: проверил server/src/app.js и server/src/routes/tickets.js, дубля нет.',
       citations: [],
       fabricated: 0,
       badLines: 0,
     }
     expect(autoVerdict(task, named).pass).toBe(true)
+    const viaDocs = {
+      answer: 'Не найдено: проверил AGENTS.md и backups/db.sql, дубля нет.',
+      citations: [],
+      fabricated: 0,
+      badLines: 0,
+    }
+    expect(autoVerdict(task, viaDocs).reason).toMatch(/отчётами\/дампами/)
   })
 
   it('E-09 не принимает markdown вместо схемы', () => {
@@ -171,6 +178,43 @@ describe('вердикт', () => {
     expect(autoVerdict(task, docs).reason).toMatch(/документации/)
     const mixed = { ...ok, citations: [{ path: 'PLAYBOOK.md', ok: true }, { path: 'db/m.sql', ok: true }] }
     expect(autoVerdict(task, mixed).reason).toMatch(/документации/)
+  })
+
+  it('E-07 не принимает тест как второе место правила', () => {
+    const task = { ...TASK, id: 'E-07' }
+    const withTest = {
+      ...ok,
+      citations: [
+        { path: 'scripts/check-schema.mjs', ok: true },
+        { path: 'scripts/check-schema.test.mjs', ok: true },
+      ],
+    }
+    expect(autoVerdict(task, withTest).reason).toMatch(/тестами/)
+    const real = {
+      ...ok,
+      citations: [
+        { path: 'server/src/validate.js', ok: true },
+        { path: 'server/src/routes/tickets.js', ok: true },
+      ],
+    }
+    expect(autoVerdict(task, real).pass).toBe(true)
+  })
+
+  it('E-09 требует назвать поля из схемы, а не только таблицы', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'agent-schema-'))
+    mkdirSync(path.join(dir, 'server', 'prisma'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'server', 'prisma', 'schema.prisma'),
+      'model tickets {\n  id Int\n  title String\n  status String\n}\n',
+      'utf8',
+    )
+    const task = { ...TASK, id: 'E-09', anchors: ['server/prisma/schema.prisma'] }
+    const citation = { path: 'server/prisma/schema.prisma', ok: true }
+    const tables = { ...ok, answer: 'Таблицы: `tickets`. '.repeat(10), citations: [citation], root: dir }
+    expect(autoVerdict(task, tables).reason).toMatch(/не названы поля/)
+    const fields = { ...ok, answer: '`tickets`: `title`, `status`. '.repeat(10), citations: [citation], root: dir }
+    expect(autoVerdict(task, fields).pass).toBe(true)
+    rmSync(dir, { recursive: true, force: true })
   })
 
   it('E-08 требует два зависимых места вне удаляемого файла', () => {
@@ -194,6 +238,13 @@ describe('вердикт', () => {
     expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'PLAYBOOK.md', ok: true }] }).reason).toMatch(/документации/)
     expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'backups/db.sql', ok: true }] }).reason).toMatch(/документации/)
     expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'src/app.ts', ok: true }] }).pass).toBe(true)
+  })
+
+  it('журнал в корне проекта — не доказательство', () => {
+    const cited = { ...ok, citations: [{ path: 'Что сделано.txt', ok: true }] }
+    expect(autoVerdict(TASK, cited).reason).toMatch(/документации\/отчёта/)
+    const real = { ...ok, citations: [{ path: 'src/app.ts', ok: true }] }
+    expect(autoVerdict(TASK, real).pass).toBe(true)
   })
 
   it('ответ «не найдено» с цитатами — противоречие', () => {
@@ -266,6 +317,48 @@ describe('инструменты', () => {
     const root = make()
     expect(searchTool(root, { pattern: 'zzz' })).toContain('Ничего не найдено')
   })
+
+  it('search_files не ищет в документации и журналах, read_file их открывает', () => {
+    const root = make()
+    writeFileSync(path.join(root, 'PLAYBOOK.md'), 'const y = 2\n', 'utf8')
+    writeFileSync(path.join(root, 'Что сделано.txt'), 'const y = 2\n', 'utf8')
+    writeFileSync(path.join(root, 'vitest-server.json'), 'const y = 2\n', 'utf8')
+    const found = searchTool(root, { pattern: 'const y' })
+    expect(found).toContain('a.ts:2')
+    expect(found).not.toContain('PLAYBOOK.md')
+    expect(found).not.toContain('.txt')
+    expect(found).not.toContain('vitest-server.json')
+    expect(readFileTool(root, { path: 'PLAYBOOK.md', start: 1, end: 1 })).toContain('const y = 2')
+  })
+
+  it('read_file отказывает на отчётах, дампах и журналах', () => {
+    const root = make()
+    mkdirSync(path.join(root, 'backups'), { recursive: true })
+    writeFileSync(path.join(root, 'backups', 'db.sql'), 'CREATE TABLE t (id int);\n', 'utf8')
+    expect(() => readFileTool(root, { path: 'backups/db.sql' })).toThrow(/не источник/)
+    expect(() => readFileTool(root, { path: 'Что сделано.txt' })).toThrow(/не источник/)
+  })
+
+  it('поиск по пути существующего файла превращается в поиск по имени', () => {
+    const root = make()
+    mkdirSync(path.join(root, 'server', 'src'), { recursive: true })
+    writeFileSync(path.join(root, 'server', 'src', 'index.js'), 'server.listen(3000)\n', 'utf8')
+    writeFileSync(path.join(root, 'server', 'package.json'), '{"start":"node src/index.js"}\n', 'utf8')
+    const found = searchTool(root, { pattern: 'server/src/index.js' })
+    expect(found).toContain('путь, а не текст')
+    expect(found).toContain('server/package.json:1')
+  })
+
+  it('повтор шаблона и две пустые выдачи дают подсказку', () => {
+    const root = make()
+    const state = { patterns: [], empty: 0 }
+    expect(searchTool(root, { pattern: 'const y' }, state)).not.toContain('Повтор')
+    expect(searchTool(root, { pattern: 'const y' }, state)).toContain('Повтор шаблона')
+    const empty = { patterns: [], empty: 0 }
+    expect(searchTool(root, { pattern: 'zzz' }, empty)).not.toContain('Две пустые')
+    expect(searchTool(root, { pattern: 'zzz' }, empty)).toContain('Две пустые')
+    expect(searchTool(root, { pattern: 'const x' }, empty)).not.toContain('Две пустые')
+  })
 })
 
 describe('текстовый вызов инструмента', () => {
@@ -306,9 +399,17 @@ describe('сообщения и отчёт', () => {
     const messages = initialMessages(TASK, 'E:/repo')
     expect(messages[0].role).toBe('system')
     expect(messages[0].content).toContain('E:/repo')
-    expect(messages[0].content).toContain('Отчёты тестов')
+    expect(messages[0].content).toContain('coverage/')
     expect(messages[1].content).toContain('E-01')
     expect(messages[1].content).toContain('Критерий pass')
+  })
+
+  it('системный промпт укладывается в бюджет 14B и держит запреты отдельным блоком', () => {
+    const system = initialMessages(TASK, 'E:/repo')[0].content
+    expect(system.length).toBeLessThanOrEqual(1000)
+    expect(system).toContain('ЗАПРЕТЫ')
+    expect(system).toContain('ЦИКЛ')
+    expect(system).toContain('ПОИСК')
   })
 
   it('summarize считает шаги и цитаты', () => {
