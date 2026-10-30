@@ -47,7 +47,7 @@ scripts\backlog.test.mjs         19 тестов механизма бэклог
 scripts\agent-eval.mjs           эвалы: список задач, запись, счёт, порог
 scripts\agent-eval.test.mjs      23 теста эвалов (vitest)
 scripts\agent-live.mjs           живой прогон локальной моделью (read-only)
-scripts\agent-live.test.mjs      47 тестов прогона (vitest)
+scripts\agent-live.test.mjs      48 тестов прогона (vitest)
 package.json                     команды тестов и гейтов бэклога
 README.md                        краткое описание репозитория на GitHub
 swiftmatch-3060.code-workspace   рабочее пространство VS Code + настройки

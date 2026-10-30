@@ -200,6 +200,34 @@ describe('вердикт', () => {
     expect(autoVerdict(task, real).pass).toBe(true)
   })
 
+  it('E-02 требует ≥8 роутов и не принимает тест', () => {
+    const task = { ...TASK, id: 'E-02', anchors: ['server/src/app.js'] }
+    const app = { path: 'server/src/app.js', ok: true }
+    const test = { path: 'server/src/__tests__/trust-proxy.test.js', ok: true }
+    const few = {
+      ...ok,
+      citations: [app, test],
+      answer: "app.get('/')\napp.get('/api/health')\n".repeat(10),
+    }
+    expect(autoVerdict(task, few).reason).toMatch(/из теста/)
+    const enough = {
+      ...ok,
+      citations: [app],
+      answer: [
+        '/', '/api/health', '/api/health/ready', '/api/metrics',
+        '/api/system-info', '/api/auth', '/api/tickets', '/api/employees',
+      ].map((route, index) => `app.get('${route}') — server/src/app.js:${172 + index}`).join('\n'),
+    }
+    expect(autoVerdict(task, enough).pass).toBe(true)
+    const mounts = {
+      ...ok,
+      citations: [app],
+      answer: ['/auth', '/tickets', '/employees', '/calendar', '/polls', '/files', '/chats', '/wiki']
+        .map((prefix, index) => `mount('${prefix}', router) — server/src/app.js:${143 + index}`).join('\n'),
+    }
+    expect(autoVerdict(task, mounts).pass).toBe(true)
+  })
+
   it('E-09 требует назвать поля из схемы, а не только таблицы', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'agent-schema-'))
     mkdirSync(path.join(dir, 'server', 'prisma'), { recursive: true })

@@ -39,6 +39,9 @@ const FORBIDDEN_EVIDENCE =
 // кода, а защита от подмены: модель иначе примет прошлый прогон за поведение.
 const NON_SOURCE =
   /(?:^|\/)(?:coverage|playwright-report|test-analysis|logs|backups)\/|vitest-[^/]*\.json$|(?:^|\/)(?:Что сделано|Что[- ]доделать|context)\.txt$/u
+
+const isTestPath = (file) =>
+  /(?:^|\/)(?:__tests__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(String(file || ''))
 export const SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'coverage', 'playwright-report',
   'test-results', '.next', '.cache', 'tmp', 'logs',
@@ -174,6 +177,24 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines, roo
       : { pass: false, reason: 'не отказался от широкой задачи' }
   }
   if (citations.length === 0) return { pass: false, reason: 'нет цитат file:line' }
+  if (task.id === 'E-02') {
+    if (citations.some((item) => item.ok && isTestPath(item.resolved || item.path))) {
+      return { pass: false, reason: 'роут взят из теста, а не из кода регистрации' }
+    }
+    const routes = new Set()
+    for (const match of text.matchAll(/app\.(?:get|post|put|patch|delete)\(\s*[`'"]([^`'"]+)/gu)) {
+      routes.add(match[1])
+    }
+    for (const match of text.matchAll(/app\.use\(\s*[`'"]([^`'"]*\/api[^`'"]*)/gu)) {
+      routes.add(match[1])
+    }
+    for (const match of text.matchAll(/\bmount\(\s*[`'"]([^`'"]+)/gu)) {
+      routes.add(match[1])
+    }
+    if (routes.size < 8) {
+      return { pass: false, reason: `названо роутов: ${routes.size}, нужно ≥8 уникальных` }
+    }
+  }
   if (task.id === 'E-07') {
     const isTest = (file) => /(?:^|\/)(?:__tests__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)
     const real = citations.filter((item) => item.ok && !isTest(item.resolved || item.path))
