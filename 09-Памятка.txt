@@ -5,7 +5,7 @@
 
 ГДЕ ПИСАТЬ
   cmd в корне проекта ....... команды проекта (гейты, тесты, сборка)
-  OpenCode .................. /next, /next-cloud, /models, /agents
+  OpenCode .................. /next, /next-cloud, /models, Tab (агент)
   Cline (панель VS Code) .... фраза: Доделай из Что доделать
   VS Code Ctrl+Shift+B ...... «Следующая задача»
   Continue .................. ничего, Tab принимает подсказку
@@ -57,7 +57,8 @@
   Браузер + 14B = тормоза  ОЗУ 16 ГБ: ollama stop swiftmatch-coder-14b (вернёт
                            и VRAM, и ОЗУ); KEEP_ALIVE 5m вместо 30m из 02
   Cline: «model not found» . ollama ps, curl localhost:11434/api/tags
-  /next не видна .......... нет .opencode/commands/next.md -> /reload
+  /next не видна .......... нет .opencode/commands/next.md -> перезапустить
+                           opencode (команды читаются при старте)
   Cline игнорирует фразу .. .clinerules не в корне проекта
   Continue молчит ......... нет swiftmatch-coder-tiny или файл назван .yml
   npm не стартует ......... PowerShell: npm.cmd, или открыть cmd

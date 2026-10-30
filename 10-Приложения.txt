@@ -114,16 +114,16 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
         "instructions": [".opencode/persona.md", "AGENTS.md"],
         "model": "ollama/swiftmatch-coder-14b",
         "default_agent": "local",
-        "agents": {
+        "agent": {
           "local": {
             "description": "Основная работа на 3060: один файл, узкая правка",
             "mode": "primary",
             "model": "ollama/swiftmatch-coder-14b",
             "steps": 10,
-            "permissions": [
-              { "action": "webfetch", "resource": "*", "effect": "deny" },
-              { "action": "websearch", "resource": "*", "effect": "deny" }
-            ]
+            "permission": {
+              "webfetch": "deny",
+              "websearch": "deny"
+            }
           },
           "cloud": {
             "description": "Эскалация: многофайловые задачи, ревью, миграции",
@@ -134,7 +134,8 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
       }
 
   Порядок: сначала в /models посмотреть точный ID облачной модели, вписать его
-  вместо <ID ...>, затем /reload. Не угадывать ID: при неверном имени OpenCode
+  вместо <ID ...>, затем перезапустить opencode (конфиг читается при старте;
+  команды /reload в TUI нет). Не угадывать ID: при неверном имени OpenCode
   либо не стартует, либо молча подставляет другую модель.
 
   Откат: сохранить копию opencode.json перед правкой (opencode.json.bak) —
@@ -144,8 +145,9 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
 4. SCRIPTS/NEXT-TASK.MJS: КОНТРАКТ ВЫБОРА ЗАДАЧИ
 
   Файл: scripts/next-task.mjs (597 строк) + scripts/next-task.test.mjs
-  (46 тестов). Лежит в проекте, в комплект не копируется — в комплекте
-  описано, что он делает и как проверяется.
+  (46 тестов). Источник правды — репозиторий проекта; в комплекте лежит
+  снимок (30.10.2026) плюс package.json с командой test:next, так что
+  поведение можно прогнать здесь же: npm.cmd run test:next.
 
   Контракт командной строки:
       node scripts/next-task.mjs                     по приоритетам бэклога
