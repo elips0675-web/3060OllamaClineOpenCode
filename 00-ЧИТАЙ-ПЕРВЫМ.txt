@@ -45,6 +45,8 @@ scripts\backlog.mjs              механизм бэклога: ID, close/open
 scripts\backlog.test.mjs         19 тестов механизма бэклога (vitest)
 scripts\agent-eval.mjs           эвалы: список задач, запись, счёт, порог
 scripts\agent-eval.test.mjs      23 теста эвалов (vitest)
+scripts\agent-live.mjs           живой прогон локальной моделью (read-only)
+scripts\agent-live.test.mjs      38 тестов прогона (vitest)
 package.json                     команды тестов и гейтов бэклога
 README.md                        краткое описание репозитория на GitHub
 swiftmatch-3060.code-workspace   рабочее пространство VS Code + настройки
@@ -178,8 +180,12 @@ swiftmatch-3060.code-workspace   рабочее пространство VS Code
         npm.cmd run eval:prompt -- --id E-01
         npm.cmd run eval:record -- --id E-01 --pass --steps 4 --fabricated 0
         npm.cmd run eval:score -- --strict
+        npm.cmd run eval:live -- --root <проект>
     Порог: pass >= 7/10, выдумано 0, среднее шагов <= 6. Ниже — править правила
     по фактам провалов, а не браться за LoRA. Подробно — evals/README.md.
+    eval:live гоняет 7 задач из 10 (E-04/E-05/E-06 требуют записи и git diff);
+    это срез модели с инструментами, ручной прогон Cline остаётся источником
+    правды. --rescore пересчитывает вердикты сохранённого прогона без модели.
 
 
 ЧЕСТНЫЕ ОГРАНИЧЕНИЯ 14B НА 3060

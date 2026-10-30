@@ -133,3 +133,6 @@ docs/AGENTS-pitfalls.md, docs/AGENTS-workflow.md, docs/AGENTS-production.md, doc
 Измеримость: `evals/tasks.json` + `scripts/agent-eval.mjs`. Порог «агент
 готов» — pass ≥ 7/10, выдумано 0, среднее шагов ≤ 6. Ниже порога правятся
 правила, а не веса.
+
+Источник фактов — только исходный код. Отчёты тестов (`vitest-*.json`),
+coverage, логи и `test-analysis/` доказательством не являются.

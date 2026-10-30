@@ -29,7 +29,7 @@
 | `templates/analysis-rules.md` | блок правил для проектного `.clinerules` |
 | `templates/agent-protocol.md` | агентный цикл, бюджет шагов, стоп-правила, формат ответа |
 | `templates/verify-checklist.md` | проверка до/после правки и команды-заготовки |
-| `templates/workflows/*.md` | 5 процедур для `.clinerules/workflows/` |
+| `templates/workflows/*.md` | 6 процедур для `.clinerules/workflows/` |
 | `templates/cline_docs/*.md` | Memory Bank: 5 файлов для `cline_docs/` проекта |
 | `evals/tasks.json` | 10 задач с бинарным критерием и ожидаемым маршрутом |
 | `models/Modelfile-*` | свои сборки под 12 ГБ: 14B q4/q6, 7B q8/q5_K_M, 1.5B |
@@ -45,6 +45,8 @@
 | `scripts/backlog.test.mjs` | 19 тестов механизма: канон, «надгробия», даты, CLI |
 | `scripts/agent-eval.mjs` | эвалы агента: список задач, запись прогонов, счёт |
 | `scripts/agent-eval.test.mjs` | 23 теста эвалов: промпты, порог, последний прогон, CLI |
+| `scripts/agent-live.mjs` | живой прогон локальной моделью: инструменты, цитаты, отчёт |
+| `scripts/agent-live.test.mjs` | 38 тестов прогона: цитаты, инструменты, вердикт |
 | `package.json` | скрипты тестов и гейтов бэклога (`vitest`, `check:backlog`) |
 | `swiftmatch-3060.code-workspace` | рабочее пространство VS Code |
 | `Что сделано.txt` / `Что доделать.txt` | журнал и открытые пункты комплекта |
@@ -168,6 +170,7 @@ RESTATE → MAP → PLAN → ACT → VERIFY → REPORT
 | `test.md` | закрепить существующее поведение | один тест в стиле проекта |
 | `review.md` | готовый diff | блокер / желательно / вопрос, каждый с цитатой |
 | `refactor.md` | упростить без смены поведения | тесты до/после, один файл |
+| `eval.md` | после правки правил/промптов/модели | число pass, дельта, что чинить |
 
 **3. Память** — `templates/cline_docs/` (Memory Bank). Копируется в
 `cline_docs/` проекта; агент читает `activeContext.md` и `progress.md` в начале
@@ -195,11 +198,18 @@ npm.cmd run eval:list
 npm.cmd run eval:prompt -- --id E-01
 npm.cmd run eval:record -- --id E-01 --pass --steps 4 --fabricated 0 --note "цитаты рабочие"
 npm.cmd run eval:score -- --strict
+npm.cmd run eval:live -- --root <проект>
 ```
 
 Порог «агент готов»: **pass ≥ 7/10**, выдуманных файлов/полей **0**, среднее
 шагов **≤ 6**. Счёт берёт последний прогон по каждой задаче; результаты лежат в
 `evals/results.json`. Подробности — `evals/README.md`.
+
+`eval:live` — автоматический read-only прогон на локальной модели: мини-агент
+получает `read_file` и `search_files`, каждая цитата проверяется по файловой
+системе (выдуманный путь или строка за концом файла = fail). Гоняются 7 задач
+из 10: E-04/E-05 (правка файла) и E-06 (git diff) требуют инструментов,
+которых у скрипта нет. Это быстрый базовый срез, а не замена ручному прогону.
 
 Порядок работы: сначала AGT-02 (живой базовый балл), потом правки правил по
 фактам провалов, и только если ломается именно **формат** — думать про LoRA.
@@ -228,7 +238,7 @@ node scripts/next-task.mjs --id AI-02 --route
 ```
 
 Тесты (51 у селектора + 22 у переключателя + 19 у сборщика + 19 у бэклога +
-23 у эвалов = 134) запускаются здесь же:
+23 у эвалов + 38 у живого прогона = 172) запускаются здесь же:
 
 ```
 npm.cmd install
@@ -237,6 +247,7 @@ npm.cmd run test:ai
 npm.cmd run test:brief
 npm.cmd run test:backlog
 npm.cmd run test:eval
+npm.cmd run test:live
 npm.cmd run test
 ```
 
