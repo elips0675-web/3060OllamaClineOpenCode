@@ -5,6 +5,7 @@ import path from 'node:path'
 import {
   KIT_ROOT,
   UserError,
+  applyPlan,
   installProject,
   parseArgs,
   runCli,
@@ -162,6 +163,19 @@ describe('init-project: .clinerules-файл', () => {
     expect(read(root, '.clinerules/00-project-rules.md')).toBe('СТАРЫЕ ПРАВИЛА\n')
     expect(existsSync(path.join(root, '.clinerules', '40-agent-cycle.md'))).toBe(true)
     expect(existsSync(path.join(root, '.clinerules'))).toBe(true)
+  })
+
+  it('возвращает старый файл, если конвертация не удалась', () => {
+    const root = tempProject()
+    const source = path.join(root, '.clinerules')
+    const target = path.join(root, 'blocked')
+    writeFileSync(source, 'СТАРЫЕ ПРАВИЛА\n', 'utf8')
+    writeFileSync(target, 'занято\n', 'utf8')
+
+    const results = applyPlan({ root, actions: [{ type: 'convert-rules', source, target }] })
+    expect(results[0].error).toBeTruthy()
+    expect(readFileSync(source, 'utf8')).toBe('СТАРЫЕ ПРАВИЛА\n')
+    expect(existsSync(`${source}.kit-backup`)).toBe(false)
   })
 })
 

@@ -263,6 +263,13 @@ describe('вердикт', () => {
     expect(autoVerdict(task, tables).reason).toMatch(/не названы поля/)
     const fields = { ...ok, answer: '`tickets`: `title`, `status`. '.repeat(10), citations: [citation], root: dir }
     expect(autoVerdict(task, fields).pass).toBe(true)
+    const cited = {
+      ...ok,
+      answer: 'Факты: `server/prisma/schema.prisma:2: title String`, `server/prisma/schema.prisma:3: status String`. '.repeat(10),
+      citations: [citation],
+      root: dir,
+    }
+    expect(autoVerdict(task, cited).pass).toBe(true)
     rmSync(dir, { recursive: true, force: true })
   })
 

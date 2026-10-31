@@ -254,9 +254,13 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines, roo
     if (root) {
       const { fields, models, files } = schemaFacts(root, citations)
       if (files.length) {
-        const named = [...text.matchAll(/`([A-Za-z_]\w*)`/gu)]
-          .map((match) => match[1])
-          .filter((token) => fields.has(token) && !models.has(token))
+        const named = [
+          ...new Set(
+            [...text.matchAll(/`([^`]+)`/gu)]
+              .flatMap((match) => match[1].match(/[A-Za-z_]\w*/gu) || [])
+              .filter((token) => fields.has(token) && !models.has(token)),
+          ),
+        ]
         if (named.length < 2) {
           return { pass: false, reason: 'не названы поля модели: нужно ≥2 поля из схемы' }
         }

@@ -257,9 +257,16 @@ export function applyPlan(plan, options = {}) {
         try {
           mkdirSync(action.target, { recursive: true })
           writeFileSync(path.join(action.target, '00-project-rules.md'), readFileSync(safeBackup))
-        } finally {
-          if (existsSync(safeBackup)) rmSync(safeBackup)
+        } catch (error) {
+          // Не терять старые правила, если создать каталог или файл не удалось.
+          try {
+            if (!existsSync(action.source)) renameSync(safeBackup, action.source)
+          } catch {
+            // Если вернуть файл нельзя, бэкап остаётся рядом: путь виден в ошибке.
+          }
+          throw error
         }
+        if (existsSync(safeBackup)) rmSync(safeBackup)
         results.push({ ...action, applied: true, movedTo: path.join(action.target, '00-project-rules.md') })
       } else {
         results.push({ ...action, applied: false, reason: `неизвестное действие: ${action.type}` })
