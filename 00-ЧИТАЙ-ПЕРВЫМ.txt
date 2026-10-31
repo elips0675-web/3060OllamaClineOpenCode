@@ -49,7 +49,7 @@ scripts\project-brief.test.mjs   19 тестов сборщика (vitest)
 scripts\backlog.mjs              механизм бэклога: ID, close/open, сверка с журналом
 scripts\backlog.test.mjs         19 тестов механизма бэклога (vitest)
 scripts\init-project.mjs         установщик правил, workflows и cline_docs в проект
-scripts\init-project.test.mjs    17 тестов установщика (vitest)
+scripts\init-project.test.mjs    18 тестов установщика (vitest)
 scripts\agent-eval.mjs           эвалы: список задач, запись, счёт, порог
 scripts\agent-eval.test.mjs      23 теста эвалов (vitest)
 scripts\agent-live.mjs           живой прогон локальной моделью (read-only)
