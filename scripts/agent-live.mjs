@@ -85,8 +85,12 @@ export function citationsOf(text) {
   const source = String(text || '')
     .replace(/```[\s\S]*?```/gu, ' ')
     .replace(/~~~[\s\S]*?~~~/gu, ' ')
+  // Раздел «Что не проверено» — явно не факты. Путь оттуда («возможно,
+  // handlers/tickets.ts») не должен считаться выдуманной цитатой.
+  const cut = source.search(/(?:^|\n)\s*(?:\*\*)?\s*Что (?:не проверено|осталось непроверенным)/iu)
+  const body = cut === -1 ? source : source.slice(0, cut)
   const re = /(?:^|[\s`("'])((?:\.\/)?[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.(?:tsx?|jsx?|mjs|cjs|json|js|sql|prisma|ya?ml|css|md))(?![A-Za-z0-9(])(?::(\d+))?/gu
-  for (const match of source.matchAll(re)) {
+  for (const match of body.matchAll(re)) {
     const file = match[1].replace(/\\/g, '/').replace(/^\.\//u, '')
     if (/^https?:/u.test(file)) continue
     found.push({ path: file, line: match[2] ? Number(match[2]) : null })
@@ -361,6 +365,9 @@ export function autoVerdict(task, input) {
               // «- title (file:line server/prisma/schema.prisma:65)».
               ...[...text.matchAll(/([A-Za-z_]\w*)[^\n]{0,40}?file:line/gu)]
                 .map((match) => match[1]),
+              // Поле списком: «- id: Int @id», «title: String».
+              ...[...text.matchAll(/(?:^|\n)\s*(?:[-*]\s*)?`?([A-Za-z_]\w*)`?\s*:/gu)]
+                .map((match) => match[1]),
             ].filter((token) => fields.has(token) && !models.has(token)),
           ),
         ]
@@ -460,9 +467,17 @@ export function searchTool(root, args, state = { patterns: [], empty: 0 }) {
     }
   }
   let re
-  try {
-    re = new RegExp(pattern, 'iu')
-  } catch {
+  // Модель иногда экранирует кавычки (`\'`) — с флагом u это ошибка RegExp.
+  // Раньше весь шаблон уходил в буквальный поиск и давал пустую выдачу.
+  const compile = (source) => {
+    try {
+      return new RegExp(source, 'iu')
+    } catch {
+      return null
+    }
+  }
+  re = compile(pattern) || compile(pattern.replace(/\\'/gu, "'").replace(/\\"/gu, '"'))
+  if (!re) {
     re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu')
   }
   const rawGlob = String(args.glob || '').trim()

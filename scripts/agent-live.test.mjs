@@ -58,6 +58,11 @@ describe('цитаты', () => {
     const text = 'Факт: `src/a.ts:3`.\n\n```js\n// src/config/constants.js\nimport x from "./missing.js"\n```\n'
     expect(citationsOf(text)).toEqual([{ path: 'src/a.ts', line: 3 }])
   })
+
+  it('не считает путь из «Что не проверено» цитатой', () => {
+    const text = 'Факт: `src/a.ts:3`.\n\n**Что не проверено:** возможно, `handlers/tickets.ts` тоже участвует.\n'
+    expect(citationsOf(text)).toEqual([{ path: 'src/a.ts', line: 3 }])
+  })
 })
 
 describe('проверка по файловой системе', () => {
@@ -370,6 +375,13 @@ describe('инструменты', () => {
   it('search_files находит строку с file:line', () => {
     const root = make()
     expect(searchTool(root, { pattern: 'const y' })).toContain('a.ts:2')
+  })
+
+  it('search_files терпит экранированную кавычку в шаблоне', () => {
+    const root = make()
+    writeFileSync(path.join(root, 'routes.js'), "app.get('/api/x', h)\n", 'utf8')
+    const out = searchTool(root, { pattern: String.raw`app\.get|app\.use\s+\'/api/\'` })
+    expect(out).toContain('routes.js:1')
   })
 
   it('search_files понимает glob с звёздочкой и точкой', () => {
@@ -724,5 +736,44 @@ describe('E-07: формат «Файл/Строка» и сверка прав�
     })
     expect(verdict.pass).toBe(false)
     expect(verdict.reason).toMatch(/формат path:line/)
+  })
+})
+
+describe('E-03: поля схемы списком', () => {
+  let dir
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+    dir = null
+  })
+
+  it('принимает «- id: Int» без обратных кавычек', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-e03-'))
+    mkdirSync(path.join(dir, 'server', 'prisma'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'server', 'prisma', 'schema.prisma'),
+      'model tickets {\n  id Int @id\n  title String\n  status String?\n}\n',
+      'utf8',
+    )
+    const text = `Таблица: tickets
+
+Обязательные поля:
+- id: Int @id
+- title: String
+- status: String? @default("open")
+
+Факты:
+- server/prisma/schema.prisma:1: model tickets {
+- server/prisma/schema.prisma:2: id Int @id
+- server/prisma/schema.prisma:3: title String
+`
+    const check = checkCitations(dir, citationsOf(text))
+    const verdict = autoVerdict({ ...TASK, id: 'E-03' }, {
+      answer: text,
+      citations: check.checked,
+      fabricated: check.fabricated,
+      badLines: check.badLines,
+      root: dir,
+    })
+    expect(verdict.pass).toBe(true)
   })
 })

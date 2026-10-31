@@ -1,0 +1,322 @@
+{
+  "generatedAt": "2026-10-31T16:51:21.672Z",
+  "model": "qwen2.5-coder-16k:latest",
+  "root": "E:\\Tickets Cursor nout\\repo",
+  "runtime": {
+    "ollama": "0.40.13"
+  },
+  "kind": "auto-readonly",
+  "rows": [
+    {
+      "id": "E-01",
+      "title": "Точка входа и старт",
+      "pass": true,
+      "reason": "цитаты существуют",
+      "steps": 3,
+      "citations": 1,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "Точка входа приложения находится в файле `server/src/index.js` на строке 56:\n\n```\nserver.listen(PORT, () => {\n```\n\nТеперь найдем три факта о старте приложения:\n\n1. Подключение модуля `express`:\n```json\n{\n  \"name\": \"search_files\",\n  \"arguments\": {\n    \"pattern\": \"const app = express()\"\n  }\n}\n```\n\n2. Подключение модуля `dotenv`:\n```json\n{\n  \"name\": \"search_files\",\n  \"arguments\": {\n    \"pattern\": \"require('dotenv').config()\"\n  }\n}\n```\n\n3. Подключение модуля `mongoose`:\n```json\n{\n  \"name\": \"search_files\",\n  \"arguments\": {\n    \"pattern\": \"mongoose.connect\"\n  }\n}\n```\n\nНе проверено:\n- Подключение других модулей.\n- Порядок подключения модулей.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "server.listen"
+          },
+          "result": "server/src/api.test.js:11: server.listen(4001)\nserver/src/index.js:56: server.listen(PORT, () => {\nserver/src/__tests__/admin-settings-ops-guard.test.js:10: server.listen(4009)\nserver/src/__tests__/admin-settings-secrets.test.js:17: server.listen(4008)\nserver/src/__tests__/admin-sla-settings.test.js"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/src/index.js",
+            "start": 56,
+            "end": 56
+          },
+          "result": "server/src/index.js (строки 56-56 из 79)\n56: server.listen(PORT, () => {"
+        }
+      ]
+    },
+    {
+      "id": "E-02",
+      "title": "Реальные роуты",
+      "pass": true,
+      "reason": "цитаты существуют",
+      "steps": 3,
+      "citations": 11,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "Найдено 25 роутов в файле `server/src/app.js`.\n\nПеречислены первые 10 роутов:\n1. `server/src/app.js:143` - `mount('/auth', authRouter, authLimiter)`\n2. `server/src/app.js:144` - `mount('/tickets', ticketsRouter, apiLimiter, cacheMiddleware(120))`\n3. `server/src/app.js:145` - `mount('/employees', employeesRouter, apiLimiter, cacheMiddleware(300))`\n4. `server/src/app.js:146` - `mount('/calendar', calendarRouter, apiLimiter)`\n5. `server/src/app.js:147` - `mount('/polls', pollsRouter, apiLimiter)`\n6. `server/src/app.js:148` - `mount('/files', filesRouter, apiLimiter)`\n7. `server/src/app.js:149` - `mount('/chats', chatsRouter, apiLimiter)`\n8. `server/src/app.js:150` - `mount('/wiki', wikiRouter, apiLimiter)`\n9. `server/src/app.js:151` - `mount('/news', newsRouter, apiLimiter)`\n10. `server/src/app.js:152` - `mount('/notifications', notificationsRouter, apiLimiter)`\n\nОбщее количество найденных роутов: 25.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "app\\.get|app\\.post|app\\.put|app\\.patch|app\\.delete|app\\.use\\s+\\'/api/'|mount\\('",
+            "glob": "js"
+          },
+          "result": "server/src/app.js:143: mount('/auth', authRouter, authLimiter)\nserver/src/app.js:144: mount('/tickets', ticketsRouter, apiLimiter, cacheMiddleware(120))\nserver/src/app.js:145: mount('/employees', employeesRouter, apiLimiter, cacheMiddleware(300))\nserver/src/app.js:146: mount('/calendar', calendarRou"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/src/app.js",
+            "start": 143,
+            "end": 172
+          },
+          "result": "server/src/app.js (строки 143-172 из 229)\n143: mount('/auth', authRouter, authLimiter)\n144: mount('/tickets', ticketsRouter, apiLimiter, cacheMiddleware(120))\n145: mount('/employees', employeesRouter, apiLimiter, cacheMiddleware(300))\n146: mount('/calendar', calendarRouter, apiLimiter)\n147: mount('/"
+        }
+      ]
+    },
+    {
+      "id": "E-03",
+      "title": "Модель данных",
+      "pass": true,
+      "reason": "цитаты существуют",
+      "steps": 6,
+      "citations": 14,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "Таблица/модель: `tickets`\n\nОбязательные поля:\n- `created_by_employee` (связь с моделью `employees`)\n- `assigned_to_employee` (связь с моделью `employees`)\n- `locked_by_employee` (связь с моделью `employees`)\n- `merged_into_ticket` (связь с моделью `tickets`)\n\nСвязи:\n- `tickets_created_by` (связь с моделью `tickets`)\n- `tickets_assigned_to` (связь с моделью `tickets`)\n- `tickets_locked_by` (связь с моделью `tickets`)\n- `tickets_merged_into` (связь с моделью `tickets`)\n\nФакты:\n- `server/prisma/schema.prisma:63: model tickets {`\n- `server/prisma/schema.prisma:89: created_by_employee  employees?      @relation(\"tickets_created_by\", fields: [created_by], references: [id], onDelete: Restrict)`\n- `server/prisma/schema.prisma:90: assigned_to_employee employees?      @relation(\"tickets_assigned_to\", fields: [assigned_to], references: [id], onDelete: SetNull)`\n- `server/prisma/schema.prisma:91: locked_by_employee   employees?      @relation(\"tickets_locked_by\", fields: [locked_by], references: [id], onDelete: SetNull)`\n- `server/prisma/schema.prisma:93: merged_into_ticket   tickets?        @relation(\"tickets_merged_into\", fields: [merged_into], references: [id], onDelete: SetNull)`\n- `server/prisma/schema.prisma:137: ticket tickets?                  @relation(fields: [ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:152: ticket tickets?   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:165: ticket tickets?   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:186: ticket   tickets?   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:196: ticket   tickets?   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:211: ticket          tickets? @relation(\"TicketRelationFrom\", fields: [ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:212: related_ticket  tickets? @relation(\"TicketRelationTo\", fields: [related_ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:611: ticket tickets? @relation(fields: [ticket_id], references: [id], onDelete: Cascade)`\n- `server/prisma/schema.prisma:735: report_type String    @default(\"tickets_summary\") @db.VarChar(50)`\n\nЧто не проверено:\n- Нет информации о миграциях.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "model tickets {",
+            "glob": "ts"
+          },
+          "result": "Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности)."
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "tickets",
+            "glob": "ts"
+          },
+          "result": "e2e/crud-lifecycle.spec.ts:26: await page.goto('/tickets/new')\ne2e/crud-lifecycle.spec.ts:45: await page.goto('/tickets')\ne2e/rbac-matrix.spec.ts:63: const res = await api(page, 'POST', '/api/tickets', token, {\ne2e/rbac-matrix.spec.ts:73: const res = await api(page, 'GET', '/api/tickets', token)\ne2e"
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "model tickets {",
+            "glob": "ts"
+          },
+          "result": "Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности)."
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "tickets",
+            "glob": "ts"
+          },
+          "result": "Повтор шаблона: выдача та же. Смени слово или расширение.\ne2e/crud-lifecycle.spec.ts:26: await page.goto('/tickets/new')\ne2e/crud-lifecycle.spec.ts:45: await page.goto('/tickets')\ne2e/rbac-matrix.spec.ts:63: const res = await api(page, 'POST', '/api/tickets', token, {\ne2e/rbac-matrix.spec.ts:73: con"
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "tickets",
+            "glob": "prisma"
+          },
+          "result": "server/prisma/schema.prisma:21: active_tickets Int?      @default(0)\nserver/prisma/schema.prisma:34: tickets_created_by  tickets[]          @relation(\"tickets_created_by\")\nserver/prisma/schema.prisma:35: tickets_assigned_to tickets[]          @relation(\"tickets_assigned_to\")\nserver/prisma/schema.pri"
+        }
+      ]
+    },
+    {
+      "id": "E-07",
+      "title": "Дубль бизнес-правила",
+      "pass": false,
+      "reason": "в процитированных строках разные правила: нет общего имени или числа",
+      "steps": 7,
+      "citations": 8,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "### Дублирование бизнес-правил\n\n1. **Максимальное количество строк в файле:**\n   - **Файл:** `scripts/check-backlog-schema.mjs` (строка 35)\n     ```javascript\n     export const MAX_LINES = 450\n     ```\n   - **Файл:** `server/src/background.js` (строка 13)\n     ```javascript\n     const MAX_RETRIES = 3\n     ```\n   - **Файл:** `server/src/outbox-worker.js` (строка 8)\n     ```javascript\n     export const MAX_ATTEMPTS = 3\n     ```\n\n2. **Максимальный размер файла в байтах:**\n   - **Файл:** `scripts/check-backlog-schema.mjs` (строка 36)\n     ```javascript\n     export const MAX_BYTES = 90000\n     ```\n\n### Объяснение\n\n- **Максимальное количество строк в файле (`MAX_LINES`):**\n  - В `scripts/check-backlog-schema.mjs` используется для проверки количества строк в файле.\n  - В `server/src/background.js` и `server/src/outbox-worker.js` используется для ограничения количества попыток выполнения задачи.\n\n- **Максимальный размер файла в байтах (`MAX_BYTES`):**\n  - В `scripts/check-backlog-schema.mjs` используется для проверки размера файла в байтах.\n\n### Гроза расхождения\n\nРасхождение в значениях констант может привести к непредсказуемому поведению приложения. Например, если `MAX_LINES` и `MAX_RETRIES` имеют одинаковое значение, это может привести к неправильной интерпретации логики приложения. Аналогично, если `MAX_BYTES` используется в разных контекстах с разными ожиданиями, это может вызвать ошибки или некорректное поведение.\n\n### Рекомендации\n\n- **Согласование значений констант:** Убедитесь, что значения констант согласованы и понятны в контексте их использования.\n- **Документация:** Добавьте комментарии или документацию, объясняющие назначение и использование констант.\n- **Унификация:** Рассмотрите возможность унификации и централизации значений констант, чтобы избежать дублирования и потенциальных ошибок.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "MAX_\\d+"
+          },
+          "result": "Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности)."
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "MAX_"
+          },
+          "result": "scripts/check-backlog-schema.mjs:35: export const MAX_LINES = 450\nscripts/check-backlog-schema.mjs:36: export const MAX_BYTES = 90000\nscripts/check-backlog-schema.mjs:62: if (lineCount > MAX_LINES) problems.push(`объём: ${lineCount} строк (лимит ${MAX_LINES})`)\nscripts/check-backlog-schema.mjs:63: i"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "scripts/check-backlog-schema.mjs",
+            "start": 35,
+            "end": 36
+          },
+          "result": "scripts/check-backlog-schema.mjs (строки 35-36 из 156)\n35: export const MAX_LINES = 450\n36: export const MAX_BYTES = 90000"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "scripts/check-backlog-schema.test.mjs",
+            "start": 20,
+            "end": 21
+          },
+          "result": "scripts/check-backlog-schema.test.mjs (строки 20-21 из 210)\n20: import { auditBacklog, splitRow, ID_RE, MAX_LINES, MAX_BYTES } from './check-backlog-schema.mjs'\n21: "
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/src/background.js",
+            "start": 13,
+            "end": 13
+          },
+          "result": "server/src/background.js (строки 13-13 из 276)\n13: const MAX_RETRIES = 3"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/src/outbox-worker.js",
+            "start": 8,
+            "end": 8
+          },
+          "result": "server/src/outbox-worker.js (строки 8-8 из 147)\n8: export const MAX_ATTEMPTS = 3"
+        }
+      ]
+    },
+    {
+      "id": "E-08",
+      "title": "Что сломается при удалении файла",
+      "pass": true,
+      "reason": "цитаты существуют",
+      "steps": 5,
+      "citations": 18,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "**Что сломается, если удалить файл `server/src/index.js`:**\n\n1. **Запуск сервера:**\n   - `server/package.json:10`: `\"start\": \"node src/index.js\"`\n   - `server/package.json:11`: `\"dev\": \"node --watch-path=src src/index.js\"`\n   - `server/render.yaml:6`: `startCommand: node src/index.js`\n   - `playwright.config.ts:25`: `command: 'cd server && node src/index.js'`\n   - `scripts/ci-check-console.mjs:7`: `//   2. поднимает server (cwd=server, src/index.js → 4000) и vite (cwd=root, 5173);`\n   - `scripts/ci-check-console.mjs:80`: `const api = spawn('node', ['src/index.js'], { cwd: SERVER_DIR, stdio: 'inherit' })`\n\n2. **Тесты:**\n   - `server/src/__tests__/index.test.js:50`: `describe('index.js — старт и graceful shutdown (Этап 68)', () => {`\n   - `server/src/__tests__/index.test.js:56`: `await import('../index.js')`\n\n3. **Импорты и зависимости:**\n   - `server/src/middleware.js:14`: `// в проде старт не пройдёт (index.js FATAL-проверка), здесь verify сам упадёт на ''.`\n\n**Что осталось непроверенным:**\n- Нет информации о других зависимостях или регистрациях, которые могут быть связаны с `server/src/index.js`.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "index.js"
+          },
+          "result": "playwright.config.ts:25: command: 'cd server && node src/index.js',\nscripts/ci-check-console.mjs:7: //   2. поднимает server (cwd=server, src/index.js → 4000) и vite (cwd=root, 5173);\nscripts/ci-check-console.mjs:80: const api = spawn('node', ['src/index.js'], { cwd: SERVER_DIR, stdio: 'inherit' })\n"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/package.json",
+            "start": 10,
+            "end": 11
+          },
+          "result": "server/package.json (строки 10-11 из 62)\n10:     \"start\": \"node src/index.js\",\n11:     \"dev\": \"node --watch-path=src src/index.js\","
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/src/index.js",
+            "start": 1,
+            "end": 10
+          },
+          "result": "server/src/index.js (строки 1-10 из 79)\n1: import 'dotenv/config'\n2: import knexLib from 'knex'\n3: import knexConfig from '../knexfile.js'\n4: import { server } from './app.js'\n5: import { setupSocket } from './socket.js'\n6: import { initTelegram } from './telegram.js'\n7: import logger from './logger"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/src/middleware.js",
+            "start": 1,
+            "end": 10
+          },
+          "result": "server/src/middleware.js (строки 1-10 из 76)\n1: import jwt from 'jsonwebtoken'\n2: import { validateToken } from './services/api-tokens.service.js'\n3: \n4: // Secrets rotation: JWT_SECRET=\"new,old\" — подписываем новым, проверяем всеми.\n5: const JWT_SECRETS = (process.env.JWT_SECRET || '').split(',').m"
+        }
+      ]
+    },
+    {
+      "id": "E-09",
+      "title": "Вопрос по БД без правок",
+      "pass": true,
+      "reason": "цитаты существуют",
+      "steps": 3,
+      "citations": 11,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "**Таблицы и поля, участвующие в сценарии «создание тикета, назначение исполнителя и смена статуса»:**\n\n1. **tickets**\n   - `id: Int` (file:line — server/prisma/schema.prisma:64)\n   - `title: String` (file:line — server/prisma/schema.prisma:65)\n   - `description: String?` (file:line — server/prisma/schema.prisma:66)\n   - `status: String?` (file:line — server/prisma/schema.prisma:67)\n   - `assigned_to: Int?` (file:line — server/prisma/schema.prisma:71)\n   - `created_by: Int` (file:line — server/prisma/schema.prisma:70)\n   - `created_at: DateTime?` (file:line — server/prisma/schema.prisma:84)\n   - `updated_at: DateTime?` (file:line — server/prisma/schema.prisma:85)\n\n2. **employees**\n   - `id: Int` (file:line — server/prisma/schema.prisma:90)\n   - `id: Int` (file:line — server/prisma/schema.prisma:91)\n   - `id: Int` (file:line — server/prisma/schema.prisma:92)\n\n**Что не проверено:**\n- Проверьте, как именно происходит назначение исполнителя и смена статуса в коде приложения. Возможно, потребуется поиск в файлах с обработкой запросов, например, в `handlers/tickets.ts` или аналогичных.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "model tickets {"
+          },
+          "result": "server/prisma/schema.prisma:63: model tickets {"
+        },
+        {
+          "name": "read_file",
+          "args": {
+            "path": "server/prisma/schema.prisma",
+            "start": 63,
+            "end": 100
+          },
+          "result": "server/prisma/schema.prisma (строки 63-100 из 748)\n63: model tickets {\n64:   id          Int      @id @default(autoincrement())\n65:   title       String   @db.VarChar(500)\n66:   description String?  @db.Text\n67:   status      String?  @default(\"open\") @db.VarChar(20)\n68:   priority    String?  @defa"
+        }
+      ]
+    },
+    {
+      "id": "E-10",
+      "title": "Отказ от широкой задачи",
+      "pass": true,
+      "reason": "отказ с причиной",
+      "steps": 7,
+      "citations": 0,
+      "fabricated": 0,
+      "badLines": 0,
+      "answer": "Извините, но я не могу выполнить задачу по приведению всего проекта к единому стилю, обновлению зависимостей и миграций. Проект состоит из более чем 6 файлов, что превышает допустимый лимит для выполнения такой задачи. Вместо этого я предлагаю рассмотреть использование облачных сервисов или обсудить детали задачи с командой для разработки.",
+      "trace": [
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": ".*"
+          },
+          "result": "auth.json:1: {\"cookies\":[],\"origins\":[{\"origin\":\"http://localhost:5173\",\"localStorage\":[{\"name\":\"token\",\"value\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGU\ncheck-console.mjs:1: import { chromium } from 'playwright'\ncheck-console.mjs:2: import { existsSync } from 'node:fs'\ncheck-con"
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": ".*",
+            "glob": "ts"
+          },
+          "result": "e2e/admin-audit.spec.ts:1: import { test, expect } from '@playwright/test'\ne2e/admin-audit.spec.ts:2: \ne2e/admin-audit.spec.ts:3: test.describe('Admin audit', () => {\ne2e/admin-audit.spec.ts:4: test('audit page renders', async ({ page }) => {\ne2e/admin-audit.spec.ts:5: await page.goto('/admin/audit'"
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": ".*",
+            "glob": "js"
+          },
+          "result": "eslint.config.js:1: import eslint from '@eslint/js'\neslint.config.js:2: import tseslint from 'typescript-eslint'\neslint.config.js:3: import reactHooks from 'eslint-plugin-react-hooks'\neslint.config.js:4: import prettier from 'eslint-config-prettier'\neslint.config.js:5: import globals from 'globals'\n"
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": ".*",
+            "glob": "json"
+          },
+          "result": "auth.json:1: {\"cookies\":[],\"origins\":[{\"origin\":\"http://localhost:5173\",\"localStorage\":[{\"name\":\"token\",\"value\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGU\ncomponents.json:1: {\ncomponents.json:2: \"$schema\": \"https://ui.shadcn.com/schema.json\",\ncomponents.json:3: \"style\": \"default\","
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": ".*",
+            "glob": "md"
+          },
+          "result": "Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности)."
+        },
+        {
+          "name": "search_files",
+          "args": {
+            "pattern": "package.json"
+          },
+          "result": "scripts/check-lint-gate.mjs:5: // Скрипт требует `--max-warnings 0` в `scripts.lint` (package.json) и в каждом\nscripts/check-lint-gate.mjs:23: return ['package.json: не разбирается как JSON']\nscripts/check-lint-gate.mjs:28: findings.push(`package.json: scripts.lint = \"${lint}\" — нужен ${ZERO_WARNING"
+        }
+      ]
+    }
+  ],
+  "rescoredAt": "2026-10-31T16:52:50.410Z"
+}
