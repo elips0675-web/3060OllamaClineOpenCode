@@ -1,0 +1,1775 @@
+КОД: ЯДРО КОМПЛЕКТА (три скрипта, от которых зависит всё остальное)
+Дата снимка: 31.10.2026. Комплект: 3060 Ollama · Cline · OpenCode.
+
+Что это: полный исходный код селектора задач, живого прогона и механизма бэклога. Это то, что реально исполняется, а не описание.
+Как читать: сначала прочитайте «01-Что-как-работает», разделы 4–6; здесь только код. Тесты этих скриптов — в файле 06.
+
+Состав (3 файлов, порядок = порядок в файле):
+   1. scripts/next-task.mjs — 24759 байт, 624 строк
+   2. scripts/agent-live.mjs — 33515 байт, 767 строк
+   3. scripts/backlog.mjs — 14236 байт, 358 строк
+
+Ничего не переписано: ниже дословное содержимое перечисленных файлов,
+разделители добавлены генератором test/build-pack.mjs.
+================================================================================
+
+================================================================================
+ФАЙЛ: scripts/next-task.mjs  (24759 байт, 624 строк)
+================================================================================
+
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const DEFAULT_BACKLOG = path.join(ROOT, 'Что доделать.txt')
+
+const SKIP_SECTION = [/Принятые решения/u, /Не брать/u, /Правила работы/u]
+const BLOCKED_SECTION = /Ждёт действий пользователя/u
+const QUEUE_SECTION = /Очередь этапов/u
+const BLOCKED_ID = [/^(ENV|AND|LEGAL|CI)-\d{2}$/u]
+const OWNER_BLOCK = /решение владельца|зависит от владельца|ждёт владельца|ждет владельца|живыми ключами|живой прогон с ключами|после ENV-0\d/iu
+const CLOSED_ITEM = /закрыт\s+Stage|закрыт\s+\d{2}\.\d{2}\.\d{4}|\(закрыт|✅\s*\d{2}\.\d{2}\.\d{4}/iu
+const ACCEPTED_DECISION = /риск принят|решено оставить|решение зафиксировано|осознанное ограничение/iu
+const WATCH_ITEM = /\(watch\b|не делать сейчас/iu
+
+const ITEM_ID = /\b([A-Z][A-Z0-9]{1,7}-\d{2})\b/u
+const PATH_TOKEN = /`([A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:tsx?|jsx?|mjs|cjs|sql|md|json|ya?ml|css|ps1|bat|conf))(?::(\d+(?:[-,]\d+)*))?`/gu
+const VERIFIED_DATE = /(\d{2}\.\d{2}\.\d{4})/u
+const CODE_PATH = /^(src|server|e2e)\//u
+
+export function classifySection(heading) {
+  if (SKIP_SECTION.some((re) => re.test(heading))) return { skip: true, priority: 99 }
+  if (BLOCKED_SECTION.test(heading)) return { skip: false, blocked: true, priority: 9 }
+  if (QUEUE_SECTION.test(heading)) return { skip: false, queue: true, priority: 4 }
+  const priorityMatch = heading.match(/\bP([0-3])\b/u)
+  if (priorityMatch) return { skip: false, priority: Number(priorityMatch[1]) }
+  if (/Дополнительно/u.test(heading)) return { skip: false, priority: 5 }
+  return { skip: false, priority: 6 }
+}
+
+export function splitSections(text) {
+  const lines = String(text).split(/\r?\n/u)
+  const out = []
+  let current = { heading: '', line: 1, lines: [] }
+  lines.forEach((line, index) => {
+    if (/^##\s+/u.test(line)) {
+      out.push(current)
+      current = { heading: line.replace(/^##\s+/u, '').trim(), line: index + 1, lines: [] }
+      return
+    }
+    current.lines.push(line)
+  })
+  out.push(current)
+  return out.filter((section) => section.heading)
+}
+
+export function extractFiles(text) {
+  const seen = new Map()
+  for (const match of String(text).matchAll(PATH_TOKEN)) {
+    const file = match[1]
+    const lines = match[2] ? match[2] : ''
+    const prev = seen.get(file)
+    if (!prev || (!prev.lines && lines)) seen.set(file, { path: file, lines })
+  }
+  return [...seen.values()]
+}
+
+function effectivePriority(meta, subMeta, sub) {
+  if (!sub || !/\bP[0-3]\b/u.test(sub)) return meta.priority
+  return Math.min(subMeta.priority, meta.priority)
+}
+
+function cleanTitle(line) {
+  return String(line)
+    .replace(/^[-*]\s+/u, '')
+    .replace(/^\d+\.\s+/u, '')
+    .replace(/\*\*/gu, '')
+    .trim()
+}
+
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'test', '.git', 'test-results', 'playwright-report', 'coverage', '.auth', '.vite'])
+
+export function walkInventory(root) {
+  const out = []
+  const walk = (dir, prefix) => {
+    let entries
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const nextPrefix = prefix ? `${prefix}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) continue
+        walk(path.join(dir, entry.name), nextPrefix)
+        continue
+      }
+      if (entry.isFile()) out.push(nextPrefix)
+    }
+  }
+  walk(root, '')
+  return out
+}
+
+export function resolveBarePaths(files, inventory) {
+  return files.map((file) => {
+    if (file.path.includes('/')) return file
+    const matches = inventory.filter((candidate) => candidate === file.path || candidate.endsWith(`/${file.path}`))
+    if (matches.length === 1) return { path: matches[0], lines: file.lines, resolved: true }
+    return file
+  })
+}
+
+export function statusOf(item) {
+  const text = `${item.title}\n${item.body}`
+  if (item.blocked || OWNER_BLOCK.test(text)) return 'blocked'
+  if (CLOSED_ITEM.test(text)) return 'closed'
+  if (ACCEPTED_DECISION.test(text)) return 'decision'
+  if (WATCH_ITEM.test(text)) return 'watch'
+  if (item.evidence === 'none') return 'no-evidence'
+  return 'ready'
+}
+
+function itemFrom(id, title, body, meta) {
+  const raw = `${title}\n${body}`
+  const files = extractFiles(raw)
+  const withLines = files.filter((file) => Boolean(file.lines))
+  const evidence = withLines.length ? 'file:line' : files.length ? 'file' : 'none'
+  const dateMatch = raw.match(VERIFIED_DATE)
+  const item = {
+    id,
+    title: cleanTitle(title),
+    body: String(body).trim(),
+    section: meta.section,
+    priority: meta.priority,
+    order: meta.order,
+    line: meta.line,
+    queue: Boolean(meta.queue),
+    blocked: Boolean(meta.blocked) || BLOCKED_ID.some((re) => re.test(id)),
+    files,
+    evidence,
+    verified: dateMatch ? dateMatch[1] : '',
+  }
+  item.status = statusOf(item)
+  return item
+}
+
+function dedupe(items) {
+  const byId = new Map()
+  const score = { 'file:line': 3, file: 2, none: 1 }
+  for (const item of items) {
+    const prev = byId.get(item.id)
+    if (!prev) {
+      byId.set(item.id, item)
+      continue
+    }
+    const better = score[item.evidence] > score[prev.evidence] || (score[item.evidence] === score[prev.evidence] && item.line < prev.line)
+    if (better) byId.set(item.id, item)
+  }
+  return [...byId.values()]
+}
+
+export function parseBacklog(text) {
+  const items = []
+  for (const section of splitSections(text)) {
+    const meta = classifySection(section.heading)
+    if (meta.skip) continue
+    let sub = ''
+    let subMeta = meta
+    let order = 0
+    for (let index = 0; index < section.lines.length; index += 1) {
+      const line = section.lines[index]
+      const lineNo = section.line + index + 1
+      const headingMatch = line.match(/^#{3,4}\s+(.+)$/u)
+      if (headingMatch) {
+        sub = headingMatch[1].trim()
+        subMeta = classifySection(sub)
+        const idMatch = sub.match(ITEM_ID)
+        if (!idMatch) continue
+        const bodyLines = []
+        for (let next = index + 1; next < section.lines.length; next += 1) {
+          if (/^#{2,4}\s+/u.test(section.lines[next])) break
+          bodyLines.push(section.lines[next])
+        }
+        order += 1
+        items.push(itemFrom(idMatch[1], sub, bodyLines.join('\n'), {
+          section: section.heading,
+          priority: effectivePriority(meta, subMeta, sub),
+          order,
+          line: lineNo,
+          queue: Boolean(meta.queue),
+          blocked: Boolean(meta.blocked) || Boolean(subMeta.blocked),
+        }))
+        continue
+      }
+
+      const bulletMatch = line.match(/^[-*]\s+\*\*([A-Z][A-Z0-9]{1,7}-\d{2})\b/u)
+      const numberedMatch = line.match(/^(\d+)\.\s+(.+)$/u)
+      if (bulletMatch) {        const bodyLines = [line]
+        for (let next = index + 1; next < section.lines.length; next += 1) {
+          const candidate = section.lines[next]
+          if (/^\s+\S/u.test(candidate)) {
+            bodyLines.push(candidate)
+            continue
+          }
+          break
+        }
+        order += 1
+        items.push(itemFrom(bulletMatch[1], line, bodyLines.join('\n'), {
+          section: sub || section.heading,
+          priority: effectivePriority(meta, subMeta, sub),
+          order,
+          line: lineNo,
+          queue: Boolean(meta.queue),
+          blocked: Boolean(meta.blocked) || Boolean(subMeta.blocked),
+        }))
+        continue
+      }
+
+      const tableMatch = line.match(/^\|\s*([A-Z][A-Z0-9]{1,7}-\d{2})\s*\|(.*)$/u)
+      if (tableMatch) {
+        const cells = line.split('|').slice(1, -1).map((cell) => cell.trim())
+        const title = cleanTitle(cells[1] || '')
+        const body = cells.slice(1).join(' | ')
+        order += 1
+        items.push(itemFrom(tableMatch[1], title, body, {
+          section: sub || section.heading,
+          priority: effectivePriority(meta, subMeta, sub),
+          order,
+          line: lineNo,
+          queue: Boolean(meta.queue),
+          blocked: Boolean(meta.blocked) || Boolean(subMeta.blocked),
+        }))
+        continue
+      }
+
+      if (numberedMatch && meta.queue) {
+        const text = numberedMatch[2]
+        const idMatch = text.match(ITEM_ID)
+        if (!idMatch) continue
+        const bodyLines = [text]
+        for (let next = index + 1; next < section.lines.length; next += 1) {
+          const candidate = section.lines[next]
+          if (/^\s+\S/u.test(candidate)) {
+            bodyLines.push(candidate)
+            continue
+          }
+          break
+        }
+        items.push(itemFrom(idMatch[1], text, bodyLines.join('\n'), {
+          section: section.heading,
+          priority: meta.priority,
+          order: Number(numberedMatch[1]),
+          line: lineNo,
+          queue: true,
+          blocked: Boolean(meta.blocked),
+        }))
+      }
+    }
+  }
+  return dedupe(items)
+}
+
+export function gatesFor(item) {
+  const files = item.files.map((file) => file.path)
+  const hasFront = files.some((file) => /^(src|e2e)\//u.test(file))
+  const hasServer = files.some((file) => /^server\//u.test(file))
+  const hasSql = files.some((file) => /^(database\/|.*\.sql$)/u.test(file))
+  const hasDocs = files.some((file) => /^(docs\/|README\.md|AGENTS\.md|project-context\.md)/u.test(file))
+  const gates = []
+  if (hasFront) {
+    gates.push('npx.cmd eslint <изменённые файлы>')
+    gates.push('npm.cmd run typecheck')
+    gates.push('npm.cmd test -- <тест затронутого файла>')
+  }
+  if (hasServer) gates.push('npm.cmd run check:n-plus-one')
+  if (hasSql) gates.push('npm.cmd run check:enum-constraints')
+  if (hasDocs) gates.push('npm.cmd run check:docs')
+  gates.push('npm.cmd run retent:check')
+  return gates.slice(0, 5)
+}
+
+const EVIDENCE_SCORE = { 'file:line': 2, file: 1, none: 0 }
+
+export function pickTask(items, options = {}) {
+  const pool = items
+    .filter((item) => item.status !== 'closed' && item.status !== 'decision')
+    .filter((item) => (options.includeBlocked ? true : item.status !== 'blocked' && item.status !== 'watch'))
+    .filter((item) => (options.queueOnly ? item.queue : true))
+    .filter((item) => (options.allowNoEvidence ? true : item.status !== 'no-evidence'))
+    .filter((item) => (options.local ? item.status === 'ready' && routeFor(item).target === 'local' : true))
+    .filter((item) => (options.id ? item.id.toUpperCase() === String(options.id).toUpperCase() : true))
+  const sorted = [...pool].sort((a, b) => {
+    const knownA = a.status === 'ready' ? 0 : 1
+    const knownB = b.status === 'ready' ? 0 : 1
+    if (knownA !== knownB) return knownA - knownB
+    if (a.priority !== b.priority) return a.priority - b.priority
+    const evidenceDiff = EVIDENCE_SCORE[b.evidence] - EVIDENCE_SCORE[a.evidence]
+    if (evidenceDiff !== 0) return evidenceDiff
+    if (a.order !== b.order) return a.order - b.order
+    if (a.files.length !== b.files.length) return a.files.length - b.files.length
+    if (a.body.length !== b.body.length) return a.body.length - b.body.length
+    return a.id.localeCompare(b.id)
+  })
+  return sorted.length ? sorted[0] : null
+}
+
+function wrap(text, width, indent) {
+  const words = String(text).split(/\s+/u).filter(Boolean)
+  const lines = []
+  let line = ''
+  for (const word of words) {
+    if (!line.length) {
+      line = word
+      continue
+    }
+    if ((line.length + 1 + word.length) > width) {
+      lines.push(line)
+      line = word
+      continue
+    }
+    line = `${line} ${word}`
+  }
+  if (line.length) lines.push(line)
+  return lines.map((value) => `${indent}${value}`).join('\n')
+}
+
+function sortFilesForSlice(files) {
+  return [...files].sort((a, b) => {
+    const ca = CODE_PATH.test(a.path) ? 0 : 1
+    const cb = CODE_PATH.test(b.path) ? 0 : 1
+    return ca - cb
+  })
+}
+
+const STATUS_TEXT = {
+  ready: 'готова',
+  blocked: 'заблокирована владельцем',
+  watch: 'отложена (watch: не делать сейчас)',
+  closed: 'уже закрыта',
+  decision: 'принятое решение, не задача',
+  'no-evidence': 'нет цитаты кода (правило проекта)',
+}
+
+function buildPrompt(item, slice) {
+  const project = 'D:\\swiftmatch1bdnoutprodpart1'
+  const lines = [
+    `Работаем с проектом SwiftMatch в ${project}.`,
+    `Задача ${item.id} из файла "Что доделать.txt" (строка ${item.line}).`,
+    '',
+    'Текст задачи:',
+    item.title.replace(/\s+/gu, ' ').trim(),
+    '',
+  ]
+  if (slice) {
+    lines.push(`Работай ТОЛЬКО с этим файлом: ${slice}`)
+    lines.push('Другие файлы не открывай и не меняй без моего разрешения.')
+    lines.push('')
+  }
+  lines.push('Требования:')
+  lines.push('- никакого any, as any и @ts-ignore;')
+  lines.push('- минимальная правка, стиль окружающего кода;')
+  lines.push('- комментарии в код не добавлять;')
+  lines.push('- сначала покажи план из 3-5 пунктов, правки вноси после моего "делай".')
+  lines.push('')
+  lines.push('Проверки после правки (все должны быть exit 0):')
+  gatesFor(item).forEach((gate) => lines.push(`- ${gate}`))
+  lines.push('')
+  lines.push('В отчёте: список изменённых файлов, вывод проверок, что осталось непонятным.')
+  return lines.join('\n')
+}
+
+const RISK_DOMAINS = [
+  {
+    code: 'money',
+    label: 'платежи и деньги',
+    pattern: /stripe|плат[её]ж|подписк|premium|оплат|возврат средств|refund|выплат|комисси|invoice|billing/iu,
+  },
+  {
+    code: 'access',
+    label: 'доступ и секреты',
+    pattern: /jwt|oauth|\bauth\b|csrf|adminauth|секрет|\bтокен|уязвим|\bidor\b|rate.?limit|парол|sanitiz|xss|sql-?инъекц/iu,
+  },
+  {
+    code: 'schema',
+    label: 'схема БД и миграции',
+    pattern: /миграц|mysql_schema|alter table|create table|\benum\b|\bcheck\s*\(|schema|схем[аыуе]|индекс/iu,
+  },
+  {
+    code: 'infra',
+    label: 'деплой и инфраструктура',
+    pattern: /docker|compose\.ya?ml|deploy\.ya?ml|nginx|деплой|kubernetes/iu,
+  },
+]
+
+export function riskyDomain(item) {
+  const haystack = [item.title, item.body, item.section || '', ...item.files.map((file) => file.path)].join('\n')
+  return RISK_DOMAINS.find((domain) => domain.pattern.test(haystack)) || null
+}
+
+export function routeFor(item) {
+  const count = item.files.length
+  if (item.evidence !== 'file:line') {
+    return {
+      target: 'cloud',
+      reason: 'no-citation',
+      text: 'облако: нет цитаты file:line, по правилу проекта такой пункт не берут',
+    }
+  }
+  const risk = riskyDomain(item)
+  if (risk) {
+    return {
+      target: 'cloud',
+      reason: risk.code,
+      text: `облако (/next-cloud): ${risk.label} — 14B тут ошибается молча; скрипт смотрит ключевые слова, сложность он не оценивает`,
+    }
+  }
+  if (count <= 1) {
+    return { target: 'local', reason: 'single-file', text: '3060: один файл, один подход' }
+  }
+  if (count > 6) {
+    return {
+      target: 'cloud',
+      reason: 'too-many-files',
+      text: `облако: ${count} файлов — локальный бюджет 1–6; сузить до одного файла`,
+    }
+  }
+  return {
+    target: 'local',
+    reason: 'stepwise',
+    text: `3060 по одному файлу, подходов: ${count} (если нужен обзор всех сразу — /next-cloud)`,
+  }
+}
+
+export function buildCard(item) {
+  const ordered = sortFilesForSlice(item.files)
+  const slice = ordered.length ? ordered[0].path : ''
+  const out = []
+  out.push('='.repeat(80))
+  out.push(`ЗАДАЧА: ${item.id}`)
+  out.push(`Раздел: ${item.section}`)
+  out.push(`Источник: Что доделать.txt:${item.line}`)
+  out.push(`Статус: ${STATUS_TEXT[item.status] || item.status}`)
+  out.push(`Проверено: ${item.verified || 'дата не указана'}`)
+  out.push(`Цитата кода: ${item.evidence === 'file:line' ? 'да (file:line)' : item.evidence === 'file' ? 'только путь, без строки' : 'нет'}`)
+  out.push(`Файлов в пункте: ${item.files.length}`)
+  out.push(`Маршрут: ${routeFor(item).text}`)
+  out.push('='.repeat(80))
+  out.push('')
+  out.push('СУТЬ')
+  out.push(wrap(item.title, 78, '  '))
+  out.push('')
+  if (item.body && item.body !== item.title) {
+    out.push('ПУНКТ ЦЕЛИКОМ')
+    out.push(wrap(cleanTitle(item.body), 78, '  '))
+    out.push('')
+  }
+  if (ordered.length) {
+    out.push('ФАЙЛЫ')
+    ordered.forEach((file) => out.push(`  - ${file.path}${file.lines ? `:${file.lines}` : ''}`))
+    out.push('')
+  }
+  if (slice) {
+    out.push('СРЕЗ ДЛЯ ОДНОГО ПОДХОДА')
+    out.push(`  ${slice}`)
+    if (ordered.length > 1) out.push('  (остальные файлы — следующими подходами: контекст 12288 не держит больше)')
+    out.push('')
+  }
+  out.push('ГЕЙТЫ (все exit 0)')
+  gatesFor(item).forEach((gate, index) => out.push(`  ${index + 1}. ${gate}`))
+  out.push('')
+  out.push('ПРОМПТ ДЛЯ АГЕНТА (скопировать целиком)')
+  buildPrompt(item, slice).split('\n').forEach((line) => out.push(`  ${line}`))
+  out.push('')
+  out.push('='.repeat(80))
+  return out.join('\n')
+}
+
+export function listRows(items) {
+  return items.map((item) => ({
+    id: item.id,
+    priority: item.priority,
+    line: item.line,
+    status: item.status,
+    evidence: item.evidence,
+    files: item.files.length,
+    queue: item.queue,
+    title: item.title.replace(/\s+/gu, ' ').slice(0, 70),
+  }))
+}
+
+function printHelp() {
+  process.stdout.write([
+    'Автовыбор задачи из «Что доделать.txt».',
+    '',
+    'Использование:',
+    '  node scripts/next-task.mjs                      карточка следующей задачи',
+    '  node scripts/next-task.mjs --local              только то, что скрипт отправляет на 3060',
+    '  node scripts/next-task.mjs --route              только решение «локально / облако»',
+    '  node scripts/next-task.mjs --list                таблица всех пунктов со статусами',
+    '  node scripts/next-task.mjs --json                карточка в JSON',
+    '  node scripts/next-task.mjs --id QA-01            конкретный пункт',
+    '  node scripts/next-task.mjs --queue-only          только раздел «Очередь этапов»',
+    '  node scripts/next-task.mjs --include-blocked     вместе с блокерами владельца',
+    '  node scripts/next-task.mjs --allow-no-evidence   и пункты без цитаты кода',
+    '  node scripts/next-task.mjs --out tmp/next-task.txt  сохранить карточку в файл',
+    '  node scripts/next-task.mjs --backlog <путь>      другой файл бэклога',
+    '',
+    'Статусы: ready (брать), blocked (владелец/ключи), watch (не делать сейчас),',
+    '         closed (закрыт), decision (принятое решение), no-evidence (нет file:line).',
+    'Exit: 0 — задача найдена, 1 — брать нечего, 2 — ошибка аргументов.',
+    '',
+  ].join('\n'))
+}
+
+function parseArgs(argv) {
+  const options = { list: false, json: false, queueOnly: false, includeBlocked: false, allowNoEvidence: false, local: false, route: false }
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
+    const next = () => {
+      index += 1
+      return argv[index]
+    }
+    if (arg === '--help' || arg === '-h') options.help = true
+    else if (arg === '--list') options.list = true
+    else if (arg === '--json') options.json = true
+    else if (arg === '--queue-only') options.queueOnly = true
+    else if (arg === '--include-blocked') options.includeBlocked = true
+    else if (arg === '--allow-no-evidence') options.allowNoEvidence = true
+    else if (arg === '--local') options.local = true
+    else if (arg === '--route') options.route = true
+    else if (arg === '--id') options.id = next()
+    else if (arg === '--out') options.out = next()
+    else if (arg === '--backlog') options.backlog = next()
+    else {
+      process.stderr.write(`Неизвестный аргумент: ${arg}\n`)
+      return { error: true }
+    }
+  }
+  return options
+}
+
+export function readBacklogFile(read, filePath) {
+  try {
+    return { ok: true, text: read(filePath) }
+  } catch (error) {
+    const code = error && typeof error.code === 'string' ? error.code : ''
+    return { ok: false, error, locked: code === 'EBUSY' || code === 'EPERM' || code === 'EACCES' }
+  }
+}
+
+function main() {
+  const options = parseArgs(process.argv.slice(2))
+  if (options.error) {
+    printHelp()
+    process.exit(2)
+  }
+  if (options.help) {
+    printHelp()
+    process.exit(0)
+  }
+  const backlogPath = options.backlog ? path.resolve(ROOT, options.backlog) : DEFAULT_BACKLOG
+  if (!fs.existsSync(backlogPath)) {
+    process.stderr.write(`Бэклог не найден: ${backlogPath}\n`)
+    process.exit(2)
+  }
+  const backlogRead = readBacklogFile((file) => fs.readFileSync(file, 'utf8'), backlogPath)
+  if (!backlogRead.ok) {
+    if (backlogRead.locked) {
+      process.stderr.write(`Файл бэклога заблокирован другой программой: ${backlogPath}\n`)
+      process.stderr.write('Закройте его (Excel, Word, редактор, синхронизация) и повторите.\n')
+      process.exit(2)
+    }
+    throw backlogRead.error
+  }
+  const parsed = parseBacklog(backlogRead.text)
+  const inventory = walkInventory(ROOT)
+  const items = parsed.map((item) => ({ ...item, files: resolveBarePaths(item.files, inventory) }))
+  if (!items.length) {
+    process.stderr.write('В бэклоге не найдено ни одного пункта с ID.\n')
+    process.exit(1)
+  }
+
+  if (options.list) {
+    const rows = listRows(items)
+    process.stdout.write(['ID', 'P', 'стр', 'статус', 'цитата', 'файлов', 'очередь', 'название'].join('\t') + '\n')
+    rows.forEach((row) => {
+      process.stdout.write([
+        row.id,
+        row.priority,
+        row.line,
+        row.status,
+        row.evidence,
+        row.files,
+        row.queue ? 'да' : '-',
+        row.title,
+      ].join('\t') + '\n')
+    })
+    process.exit(0)
+  }
+
+  const task = pickTask(items, options)
+  if (!task) {
+    const named = options.id ? items.find((item) => item.id.toUpperCase() === String(options.id).toUpperCase()) : null
+    if (named) {
+      process.stderr.write(`Пункт ${named.id} брать нельзя: ${STATUS_TEXT[named.status] || named.status} (Что доделать.txt:${named.line}).\n`)
+    } else {
+      process.stderr.write('Брать нечего: все подходящие пункты закрыты, заблокированы владельцем или без цитаты кода.\n')
+    }
+    process.stderr.write('Посмотреть всё: --list; включить блокеры: --include-blocked; без цитаты: --allow-no-evidence\n')
+    process.exit(1)
+  }
+
+  if (options.route) {
+    const route = routeFor(task)
+    process.stdout.write(`${route.target}\t${route.text}\n`)
+    process.exit(0)
+  }
+
+  const payload = options.json ? JSON.stringify({ task, route: routeFor(task), gates: gatesFor(task), card: buildCard(task) }, null, 2) : buildCard(task)
+  if (options.out) {
+    const outPath = path.resolve(ROOT, options.out)
+    fs.mkdirSync(path.dirname(outPath), { recursive: true })
+    fs.writeFileSync(outPath, `${payload}\n`, 'utf8')
+    process.stderr.write(`Карточка сохранена: ${outPath}\n`)
+  }
+  process.stdout.write(`${payload}\n`)
+  process.exit(0)
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()
+
+================================================================================
+ФАЙЛ: scripts/agent-live.mjs  (33515 байт, 767 строк)
+================================================================================
+
+// Живой прогон эвалов локальной моделью через Ollama API (tool calling).
+//
+// Зачем: evals/tasks.json задаёт 10 задач, но без прогона это только план.
+// Скрипт поднимает мини-агента с инструментами read_file/search_files и
+// проверяет ответ по фактам: каждая цитата `path:line` обязана существовать.
+//
+// Ограничение: инструментов записи и shell нет, поэтому E-04/E-05 (правка
+// файла) и E-06 (git diff) здесь не гоняются — см. AUTO_SKIP. Это read-only
+// базовый балл, а не замена ручному прогону в Cline; результаты пишутся
+// отдельно от evals/results.json.
+//
+// Использование:
+//   node scripts/agent-live.mjs --root <проект> [--tasks E-01,E-02] [--max-calls 6]
+//   node scripts/agent-live.mjs --root <проект> --dry-run
+//   node scripts/agent-live.mjs --root <проект> --model qwen2.5-coder-16k:latest
+//
+// Коды выхода: 0 — прогон завершён, 1 — ни одна задача не выполнена,
+// 2 — ошибка аргументов/окружения.
+
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+const KIT_ROOT = path.resolve(import.meta.dirname, '..')
+export const DEFAULT_TASKS = path.join(KIT_ROOT, 'evals', 'tasks.json')
+export const DEFAULT_HOST = 'http://localhost:11434'
+export const AUTO_SKIP = {
+  'E-04': 'нужна правка файла: у скрипта нет инструментов записи',
+  'E-05': 'нужна правка файла: у скрипта нет инструментов записи',
+  'E-06': 'нужен git diff: у скрипта нет shell-инструмента, задача для Cline/облака',
+}
+export const READ_ONLY_TASKS = ['E-01', 'E-02', 'E-03', 'E-07', 'E-08', 'E-09', 'E-10']
+
+// Доказательство — только исходный код. Документация, журналы, отчёты прогонов,
+// логи и дампы БД фиксируют результат, а не поведение кода.
+const FORBIDDEN_EVIDENCE =
+  /\.(?:md|txt)$|(?:^|\/)vitest-[^/]*\.json$|(?:^|\/)(?:coverage|playwright-report|test-analysis|logs|backups)\//u
+
+// Что нельзя даже открывать: отчёты, дампы и журналы. Это не запрет на чтение
+// кода, а защита от подмены: модель иначе примет прошлый прогон за поведение.
+const NON_SOURCE =
+  /(?:^|\/)(?:coverage|playwright-report|test-analysis|logs|backups)\/|vitest-[^/]*\.json$|(?:^|\/)(?:Что сделано|Что[- ]доделать|context)\.txt$/u
+
+const isTestPath = (file) =>
+  /(?:^|\/)(?:__tests__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(String(file || ''))
+export const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', 'coverage', 'playwright-report',
+  'test-results', 'test-analysis', 'backups', '.next', '.cache', 'tmp', 'logs',
+])
+
+// Документация и журналы (.md/.txt) в поиск не попадают: агент не должен
+// принимать прошлые отчёты за факты о коде. read_file их по-прежнему откроет.
+const CODE_EXT = /\.(?:tsx?|jsx?|mjs|cjs|js|sql|prisma|json|ya?ml|css)$/u
+
+export function parseArgs(argv) {
+  const out = { flags: new Set(), values: {} }
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]
+    if (!arg.startsWith('--')) throw new Error(`неизвестный аргумент: ${arg}`)
+    const key = arg.slice(2)
+    if (['dry-run', 'strict', 'help'].includes(key)) {
+      out.flags.add(key)
+      continue
+    }
+    const value = argv[i + 1]
+    if (value === undefined || value.startsWith('--')) throw new Error(`--${key} требует значение`)
+    out.values[key] = value
+    i += 1
+  }
+  return out
+}
+
+/** Путь внутри корня; выход за корень запрещён. */
+export function safeResolve(root, target) {
+  const base = path.resolve(root)
+  const full = path.resolve(base, String(target || '.'))
+  const rel = path.relative(base, full)
+  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`путь вне проекта: ${target}`)
+  return full
+}
+
+export function citationsOf(text) {
+  const found = []
+  const re = /(?:^|[\s`("'])((?:\.\/)?[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.(?:tsx?|jsx?|mjs|cjs|json|js|sql|prisma|ya?ml|css|md))(?![A-Za-z0-9(])(?::(\d+))?/gu
+  for (const match of String(text || '').matchAll(re)) {
+    const file = match[1].replace(/\\/g, '/').replace(/^\.\//u, '')
+    if (/^https?:/u.test(file)) continue
+    found.push({ path: file, line: match[2] ? Number(match[2]) : null })
+  }
+  return found
+}
+
+function inventoryOf(root) {
+  const base = path.resolve(root)
+  return walk(base, base).map((file) => path.relative(base, file).replace(/\\/g, '/'))
+}
+
+export function checkCitations(root, citations, io = {}) {
+  const exists = io.exists || ((file) => existsSync(file))
+  const lines = io.lines || ((file) => readFileSync(file, 'utf8').split(/\r?\n/u).length)
+  let inventory = io.inventory || null
+  const resolveSuffix = (item) => {
+    if (!inventory) inventory = inventoryOf(root)
+    const hits = inventory.filter((file) => file === item.path || file.endsWith(`/${item.path}`))
+    return hits.length === 1 ? hits[0] : null
+  }
+  const checked = citations.map((item) => {
+    let file = safeResolve(root, item.path)
+    let resolved = null
+    if (!exists(file)) {
+      const hit = resolveSuffix(item)
+      if (!hit) return { ...item, ok: false, reason: 'missing-file' }
+      resolved = hit
+      file = safeResolve(root, hit)
+    }
+    if (item.line !== null) {
+      const total = lines(file)
+      if (item.line < 1 || item.line > total) {
+        return { ...item, ok: false, reason: `line>${total}`, resolved }
+      }
+    }
+    return { ...item, ok: true, reason: '', resolved }
+  })
+  return {
+    checked,
+    fabricated: checked.filter((item) => item.reason === 'missing-file').length,
+    badLines: checked.filter((item) => item.reason.startsWith('line>')).length,
+  }
+}
+
+function schemaFacts(root, citations) {
+  const fields = new Set()
+  const models = new Set()
+  const files = [...new Set(
+    citations
+      .filter((item) => item.ok && /\.(?:prisma|sql)$/u.test(item.resolved || item.path))
+      .map((item) => item.resolved || item.path),
+  )]
+  for (const rel of files) {
+    const full = path.resolve(root, rel)
+    if (!existsSync(full)) continue
+    for (const line of readFileSync(full, 'utf8').split(/\r?\n/u)) {
+      const model = /^\s*(?:model|CREATE TABLE)\s+`?(\w+)`?/iu.exec(line)
+      if (model) {
+        models.add(model[1])
+        continue
+      }
+      if (/^\s*(?:@@|--|\/\/)/u.test(line)) continue
+      const field = /^\s{2,}(\w+)\s+\w+/u.exec(line)
+      if (field) fields.add(field[1])
+    }
+  }
+  return { fields, models, files }
+}
+
+export function autoVerdict(task, { answer, citations, fabricated, badLines, root }) {
+  const text = String(answer || '')
+  if (parseTextCalls(text).length > 0) {
+    return { pass: false, reason: 'ответ — вызов инструмента, а не вывод' }
+  }
+  if (task.id !== 'E-07' && citations.some((item) => FORBIDDEN_EVIDENCE.test(item.resolved || item.path))) {
+    return { pass: false, reason: 'цитата из документации/отчёта, а не из кода' }
+  }
+  if (task.id === 'E-07' && /не найдено|нет дубл/iu.test(text)) {
+    if (/(?:^|[\s(`])(?:backups|coverage|logs|test-analysis|playwright-report)\/|vitest-[^\s`]*\.json|\.md\b|\.txt\b/iu.test(text)) {
+      return { pass: false, reason: '«не найдено» подтверждено отчётами/дампами, а не кодом' }
+    }
+    const named = /[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|json|md|sql|prisma)/u.test(text)
+    return named
+      ? { pass: true, reason: 'честное «не найдено» с указанием файлов' }
+      : { pass: false, reason: '«не найдено» без указания проверенных файлов' }
+  }
+  if (text.trim().length < 120) return { pass: false, reason: 'пустой/короткий ответ' }
+  if (task.id === 'E-10') {
+    const refused = /облак|облачн|сузить|сужа|шире|широка|слишком мног|более 6 файлов|множество файлов|не выполнена|не буду|не могу выполн|останавли/u.test(text)
+    return refused
+      ? { pass: true, reason: 'отказ с причиной' }
+      : { pass: false, reason: 'не отказался от широкой задачи' }
+  }
+  if (citations.length === 0) return { pass: false, reason: 'нет цитат file:line' }
+  if (task.id === 'E-02') {
+    if (citations.some((item) => item.ok && isTestPath(item.resolved || item.path))) {
+      return { pass: false, reason: 'роут взят из теста, а не из кода регистрации' }
+    }
+    const routes = new Set()
+    for (const match of text.matchAll(/app\.(?:get|post|put|patch|delete)\(\s*[`'"]([^`'"]+)/gu)) {
+      routes.add(match[1])
+    }
+    for (const match of text.matchAll(/app\.use\(\s*[`'"]([^`'"]*\/api[^`'"]*)/gu)) {
+      routes.add(match[1])
+    }
+    for (const match of text.matchAll(/\bmount\(\s*[`'"]([^`'"]+)/gu)) {
+      routes.add(match[1])
+    }
+    if (routes.size < 8) {
+      return { pass: false, reason: `названо роутов: ${routes.size}, нужно ≥8 уникальных` }
+    }
+  }
+  if (task.id === 'E-07') {
+    const isTest = (file) => /(?:^|\/)(?:__tests__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)
+    const real = citations.filter(
+      (item) => item.ok && item.line !== null && !isTest(item.resolved || item.path),
+    )
+    if (real.length < 2) {
+      return { pass: false, reason: 'дубль подтверждён тестами, а не двумя местами кода' }
+    }
+    if (new Set(real.map((item) => item.resolved || item.path)).size < 2) {
+      return { pass: false, reason: 'оба места правила в одном файле' }
+    }
+    if (root) {
+      const code = real.filter((item) => {
+        if (item.line === null) return true
+        const full = path.resolve(root, item.resolved || item.path)
+        if (!existsSync(full)) return true
+        const source = readFileSync(full, 'utf8').split(/\r?\n/u)[item.line - 1] || ''
+        return !/^\s*(?:\/\/|\/\*|\*|#)/u.test(source)
+      })
+      if (code.length < 2) {
+        return { pass: false, reason: 'правило подтверждено комментариями, а не кодом' }
+      }
+    }
+  }
+  if (fabricated > 0) return { pass: false, reason: `выдуманные файлы: ${fabricated}` }
+  if (badLines > 0) return { pass: false, reason: `строки вне файла: ${badLines}` }
+  const head = text.trim().slice(0, 160)
+  if (/не найд|не удалось/iu.test(head)) {
+    return { pass: false, reason: 'противоречие: «не найдено» и цитаты в том же ответе' }
+  }
+  if (task.anchors?.length) {
+    const paths = citations.map((item) => item.resolved || item.path)
+    if (!paths.some((file) => task.anchors.some((anchor) => file.includes(anchor)))) {
+      return { pass: false, reason: `нет ключевого факта: ${task.anchors.join(' | ')}` }
+    }
+  }
+  if (task.id === 'E-08') {
+    const target = (task.prompt.match(/`([^`]+\.(?:tsx?|jsx?|mjs|cjs|js|json))`/u) || [])[1]
+    const fileOf = (item) => item.resolved || item.path
+    const deps = new Set(
+      citations
+        .filter((item) => item.ok)
+        .map(fileOf)
+        .filter((file) => file && file !== target),
+    )
+    if (deps.size < 2) {
+      return { pass: false, reason: `мало зависимых мест вне ${target || 'удаляемого файла'}` }
+    }
+  }
+  if (task.id === 'E-03' || task.id === 'E-09') {
+    if (citations.some((item) => /\.md$/u.test(item.path))) {
+      return { pass: false, reason: 'цитата из документации вместо схемы' }
+    }
+    if (!citations.some((item) => /\.(?:sql|prisma)$/u.test(item.resolved || item.path))) {
+      return { pass: false, reason: 'цитаты не из схемы или миграции' }
+    }
+    if (root) {
+      const { fields, models, files } = schemaFacts(root, citations)
+      if (files.length) {
+        const named = [
+          ...new Set(
+            [
+              ...[...text.matchAll(/`([^`]+)`/gu)]
+                .flatMap((match) => match[1].match(/[A-Za-z_]\w*/gu) || []),
+              // Поле может стоять без обратных кавычек, но рядом с цитатой:
+              // «- title (file:line server/prisma/schema.prisma:65)».
+              ...[...text.matchAll(/([A-Za-z_]\w*)[^\n]{0,40}?file:line/gu)]
+                .map((match) => match[1]),
+            ].filter((token) => fields.has(token) && !models.has(token)),
+          ),
+        ]
+        if (named.length < 2) {
+          return { pass: false, reason: 'не названы поля модели: нужно ≥2 поля из схемы' }
+        }
+      }
+    }
+  }
+  return { pass: true, reason: 'цитаты существуют' }
+}
+
+export function toolDefinitions() {
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'read_file',
+        description: 'Read a project file with line numbers. Use start/end for large files.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'path relative to project root' },
+            start: { type: 'integer', description: 'first line, 1-based' },
+            end: { type: 'integer', description: 'last line' },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'search_files',
+        description: 'Search text or regex in project files. Returns path:line: text.',
+        parameters: {
+          type: 'object',
+          properties: {
+            pattern: { type: 'string', description: 'literal text or regular expression' },
+            glob: { type: 'string', description: 'optional file extension filter, e.g. ts' },
+          },
+          required: ['pattern'],
+        },
+      },
+    },
+  ]
+}
+
+export function readFileTool(root, args) {
+  const file = safeResolve(root, args.path)
+  if (NON_SOURCE.test(path.relative(path.resolve(root), file).replace(/\\/g, '/'))) {
+    throw new Error(`не источник фактов: ${args.path}. Читай исходники и схему (.prisma/.sql из database/), а не отчёты, дампы и журналы`)
+  }
+  if (!existsSync(file) || !statSync(file).isFile()) throw new Error(`нет файла: ${args.path}`)
+  const all = readFileSync(file, 'utf8').split(/\r?\n/u)
+  const start = Math.max(1, Number(args.start) || 1)
+  const end = Math.min(all.length, Number(args.end) || start + 199)
+  if (start > all.length) throw new Error(`в файле ${all.length} строк, start=${start}`)
+  const body = all.slice(start - 1, end).map((line, index) => `${start + index}: ${line}`).join('\n')
+  const rel = path.relative(path.resolve(root), file).replace(/\\/g, '/')
+  return `${rel} (строки ${start}-${end} из ${all.length})\n${body}`.slice(0, 6000)
+}
+
+function walk(root, dir, depth = 0) {
+  if (depth > 8) return []
+  const out = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') && entry.name !== '.clinerules') continue
+    if (SKIP_DIRS.has(entry.name)) continue
+    // Lock-файлы — метаданные зависимостей, а не код проекта: их строки вроде
+    // "cli/index.js" модель принимает за файлы проекта и получает fail.
+    if (/^(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml)$/u.test(entry.name)) continue
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...walk(root, full, depth + 1))
+    else if (CODE_EXT.test(entry.name) && !/^vitest-[^/]*\.json$/u.test(entry.name)) out.push(full)
+  }
+  return out
+}
+
+export function searchTool(root, args, state = { patterns: [], empty: 0 }) {
+  let pattern = String(args.pattern)
+  const key = `${pattern}|${String(args.glob || '').trim()}`
+  const repeated = state.patterns.includes(key)
+  state.patterns.push(key)
+  // Модель часто ищет путь как текст — таких строк в коде нет. Если это
+  // существующий файл, ищем ссылки по его имени: так видно зависимости.
+  let pathHint = ''
+  if (/[/\\]/u.test(pattern) && /\.\w+$/u.test(pattern)) {
+    try {
+      const candidate = safeResolve(root, pattern)
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        pathHint = `«${pattern}» — путь, а не текст. Ищу ссылки по имени ${path.basename(candidate)}.\n`
+        pattern = path.basename(candidate).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+      }
+    } catch {
+      // путь вне корня — ищем как обычный текст
+    }
+  }
+  let re
+  try {
+    re = new RegExp(pattern, 'iu')
+  } catch {
+    re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu')
+  }
+  const rawGlob = String(args.glob || '').trim()
+  const extName = rawGlob.replace(/^\*?\.?/u, '')
+  const ext = extName ? new RegExp(`\\.${extName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'u') : null
+  const hits = []
+  for (const file of walk(root, path.resolve(root))) {
+    if (ext && !ext.test(file)) continue
+    if (statSync(file).size > 512 * 1024) continue
+    const rows = readFileSync(file, 'utf8').split(/\r?\n/u)
+    for (let index = 0; index < rows.length; index += 1) {
+      if (re.test(rows[index])) {
+        hits.push(`${path.relative(root, file).replace(/\\/g, '/')}:${index + 1}: ${rows[index].trim().slice(0, 160)}`)
+        if (hits.length >= 40) break
+      }
+    }
+    if (hits.length >= 40) break
+  }
+  const repeatHint = repeated ? 'Повтор шаблона: выдача та же. Смени слово или расширение.\n' : ''
+  if (hits.length) {
+    state.empty = 0
+    return pathHint + repeatHint + hits.join('\n')
+  }
+  state.empty += 1
+  const emptyHint = state.empty >= 2
+    ? 'Две пустые выдачи подряд. Смени слово или расширение, не повторяй шаблон. '
+    : ''
+  return pathHint + emptyHint +
+    'Ничего не найдено. Поиск идёт по одной строке: уберите `{...}`, `[^)]*` и `.*`, попробуйте одно слово (например, имя сущности).'
+}
+
+export function initialMessages(task, root) {
+  return [
+    {
+      role: 'system',
+      content: [
+        'Локальный ИИ-агент по коду. По-русски, коротко.',
+        '',
+        'ЦИКЛ',
+        '1. Факт — инструментом: search_files, затем read_file. Не угадывай.',
+        '2. Каждый факт — `path:line` из выдачи инструмента.',
+        '3. Нет фактов — перечисли проверенные файлы, не «не найдено».',
+        '',
+        'ЗАПРЕТЫ',
+        '- Не цитировать .md/.txt, отчёты, coverage/, logs/, backups/.',
+        '- Тест — не поведение кода.',
+        '- Называть файл, функцию или поле, которых не видел в выводе инструмента.',
+        '- Писать вызов инструмента вместо вывода.',
+        '- Утверждать «X зависит от Y» без чтения X.',
+        '',
+        'ПОИСК',
+        '- Одна строка на шаблон: без `{...}`, `[^)]*`, `.*`.',
+        '- Две пустые выдачи — смени слово или расширение.',
+        '- Ссылки ищи по имени (index.js), не по пути; читай 2 найденных файла.',
+        '- Точка входа — scripts в package.json, server.listen.',
+        '- Prisma: `model tickets {`, ищи `tickets`, не `Ticket`; нет `required: true`.',
+        '- Роут — mount или app.get, не middleware.',
+        '',
+        'Если задача > 6 файлов или деньги/доступы/БД — откажись, предложи облако.',
+        `Корень: ${root}`,
+        'Формат: вывод, факты с file:line, что не проверено.',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        `# ${task.id} — ${task.title}`,
+        `Критерий pass: ${task.criterion}`,
+        '',
+        task.prompt,
+      ].join('\n'),
+    },
+  ]
+}
+
+/**
+ * Модель не отдаёт tool_calls, а пишет JSON в content — иногда несколько блоков
+ * подряд. Разбираем все верхнеуровневые объекты, иначе второй вызов теряется и
+ * обрыв на вызове засчитывается как финальный ответ.
+ */
+export function parseTextCalls(content) {
+  const text = String(content || '').replace(/```(?:json)?/giu, '')
+  const calls = []
+  let depth = 0
+  let startIdx = -1
+  let inString = false
+  let quote = ''
+  let escaped = false
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === quote) inString = false
+      continue
+    }
+    if (char === '"' || char === "'") {
+      inString = true
+      quote = char
+      continue
+    }
+    if (char === '{') {
+      if (depth === 0) startIdx = i
+      depth += 1
+      continue
+    }
+    if (char === '}' && depth > 0) {
+      depth -= 1
+      if (depth === 0 && startIdx >= 0) {
+        const raw = text.slice(startIdx, i + 1)
+        startIdx = -1
+        try {
+          const data = JSON.parse(raw)
+          const name = data.name || data.tool || data.function?.name
+          const args = data.arguments || data.parameters || data.function?.arguments || {}
+          if (name === 'read_file' || name === 'search_files') calls.push({ name, args })
+        } catch {
+          // не JSON — просто текст
+        }
+      }
+    }
+  }
+  return calls
+}
+
+export function parseTextCall(content) {
+  return parseTextCalls(content)[0] || null
+}
+
+async function chat(host, payload, timeoutMs) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(`${host}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`Ollama ${response.status}: ${await response.text()}`)
+    return await response.json()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export async function runTask(task, options) {
+  const { root, host, model, maxCalls, timeoutMs } = options
+  const messages = initialMessages(task, root)
+  const toolDefs = toolDefinitions()
+  const searchState = { patterns: [], empty: 0 }
+  let toolCalls = 0
+  const trace = []
+
+  // Модель может упереться в num_predict и оборвать ответ на полуслове
+  // (в живом прогоне E-07 так потерялся второй MAX_RETRIES). Просим
+  // продолжить с места обрыва; если лимит не отпустил — честно помечаем.
+  const finishAnswer = async (text, reason, baseMessages) => {
+    let answer = String(text || '')
+    let stop = reason
+    for (let i = 0; i < 2 && stop === 'length'; i += 1) {
+      const next = await chat(host, {
+        model,
+        messages: [
+          ...baseMessages,
+          { role: 'assistant', content: answer },
+          { role: 'user', content: 'Ответ обрезан лимитом. Продолжи с места обрыва, без повторов и вступлений.' },
+        ],
+        stream: false,
+        options: { temperature: 0.1, top_p: 0.9, num_ctx: 12288, num_predict: 900 },
+      }, timeoutMs)
+      const chunk = String(next.message?.content || '')
+      if (!chunk.trim()) break
+      answer += `${answer.endsWith('\n') || chunk.startsWith('\n') ? '' : '\n'}${chunk}`
+      stop = next.done_reason
+    }
+    if (stop === 'length') answer += '\n\n[ответ обрезан: лимит модели]'
+    return answer
+  }
+
+  for (;;) {
+    const data = await chat(host, {
+      model,
+      messages,
+      tools: toolDefs,
+      stream: false,
+      options: { temperature: 0.1, top_p: 0.9, num_ctx: 12288, num_predict: 900 },
+    }, timeoutMs)
+    const message = data.message || {}
+    let calls = Array.isArray(message.tool_calls) ? message.tool_calls : []
+    if (calls.length === 0) {
+      const textCalls = parseTextCalls(message.content)
+      if (textCalls.length) {
+        calls = textCalls.map((call) => ({ function: { name: call.name, arguments: call.args } }))
+      }
+    }
+    if (calls.length === 0) {
+      const answer = await finishAnswer(message.content, data.done_reason, messages)
+      return { answer, toolCalls, trace }
+    }
+    if (toolCalls >= maxCalls) {
+      messages.push({ role: 'user', content: 'Лимит инструментов исчерпан. Дай финальный ответ по уже прочитанному.' })
+      const final = await chat(host, { model, messages, stream: false, options: { temperature: 0.1, num_ctx: 12288, num_predict: 900 } }, timeoutMs)
+      const answer = await finishAnswer(final.message?.content, final.done_reason, messages)
+      return { answer, toolCalls, trace }
+    }
+    messages.push({ role: 'assistant', content: message.content || '', tool_calls: calls })
+    for (const call of calls) {
+      const name = call.function?.name
+      const rawArgs = call.function?.arguments || {}
+      const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs
+      let result
+      try {
+        result = name === 'read_file'
+          ? readFileTool(root, args)
+          : name === 'search_files'
+            ? searchTool(root, args, searchState)
+            : `Неизвестный инструмент: ${name}`
+      } catch (err) {
+        result = `Ошибка: ${err.message}`
+      }
+      toolCalls += 1
+      trace.push({ name, args, result: result.slice(0, 300) })
+      messages.push({ role: 'tool', content: result, tool_name: name })
+    }
+  }
+}
+
+export function summarize(task, result, check, root) {
+  const verdict = autoVerdict(task, {
+    answer: result.answer,
+    citations: check.checked,
+    fabricated: check.fabricated,
+    badLines: check.badLines,
+    root,
+  })
+  return {
+    id: task.id,
+    title: task.title,
+    pass: verdict.pass,
+    reason: verdict.reason,
+    steps: result.toolCalls + 1,
+    citations: check.checked.length,
+    fabricated: check.fabricated,
+    badLines: check.badLines,
+    answer: result.answer,
+    trace: result.trace,
+  }
+}
+
+export function formatSummary(rows) {
+  const lines = ['ID    задача                          итог  шаги  цитат  выдумано  причина']
+  for (const row of rows) {
+    lines.push(
+      `${row.id.padEnd(5)} ${row.title.padEnd(31)} ${(row.pass ? 'PASS' : 'FAIL').padEnd(5)} ` +
+        `${String(row.steps).padStart(4)} ${String(row.citations).padStart(6)} ` +
+        `${String(row.fabricated).padStart(9)}  ${row.reason}`,
+    )
+  }
+  const passed = rows.filter((row) => row.pass).length
+  const avg = rows.length
+    ? Math.round((rows.reduce((sum, row) => sum + row.steps, 0) / rows.length) * 10) / 10
+    : 0
+  lines.push('')
+  lines.push(`Итог: ${passed}/${rows.length} pass, среднее шагов ${avg}, выдумано ${rows.reduce((sum, row) => sum + row.fabricated, 0)}`)
+  return lines.join('\n')
+}
+
+export function rescoreRows(payload, root, tasks) {
+  return payload.rows.map((row) => {
+    const task = tasks.find((item) => item.id === row.id)
+    if (!task) return row
+    const check = checkCitations(root, citationsOf(row.answer))
+    return summarize(task, { answer: row.answer, toolCalls: Math.max(0, row.steps - 1), trace: row.trace || [] }, check, root)
+  })
+}
+
+function usage() {
+  return `Живой прогон эвалов локальной моделью (read-only).
+
+  node scripts/agent-live.mjs --root <проект> [--tasks E-01,E-02] [--model <id>]
+      [--host http://localhost:11434] [--max-calls 6] [--timeout 180] [--out <json>]
+  node scripts/agent-live.mjs --root <проект> --dry-run
+  node scripts/agent-live.mjs --root <проект> --rescore evals/live.json
+
+  Без --tasks берутся задачи, которые скрипт умеет проверять:
+  ${READ_ONLY_TASKS.join(', ')}.
+  Пропускаются с причиной:
+${Object.entries(AUTO_SKIP).map(([id, reason]) => `    ${id} — ${reason}`).join('\n')}
+`
+}
+
+async function main(argv) {
+  let args
+  try {
+    args = parseArgs(argv)
+  } catch (err) {
+    console.error(`✗ ${err.message}`)
+    return 2
+  }
+  if (args.flags.has('help') || !args.values.root) {
+    console.log(usage())
+    return args.flags.has('help') ? 0 : 2
+  }
+
+  const root = path.resolve(args.values.root)
+  if (!existsSync(root)) {
+    console.error(`✗ нет каталога: ${root}`)
+    return 2
+  }
+  const tasks = JSON.parse(readFileSync(DEFAULT_TASKS, 'utf8'))
+
+  if (args.values.rescore) {
+    const file = path.resolve(args.values.rescore)
+    if (!existsSync(file)) {
+      console.error(`✗ нет файла прогона: ${file}`)
+      return 2
+    }
+    const payload = JSON.parse(readFileSync(file, 'utf8'))
+    const rows = rescoreRows(payload, root, tasks)
+    console.log(formatSummary(rows))
+    const out = path.resolve(args.values.out || file)
+    writeFileSync(out, `${JSON.stringify({ ...payload, rescoredAt: new Date().toISOString(), rows }, null, 2)}\n`, 'utf8')
+    console.log(`\nПересчитано без вызова модели: ${out}`)
+    return rows.some((row) => row.pass) ? 0 : 1
+  }
+
+  const ids = args.values.tasks
+    ? String(args.values.tasks).split(',').map((id) => id.trim().toUpperCase())
+    : READ_ONLY_TASKS
+  const selected = tasks.filter((task) => ids.includes(task.id)).filter((task) => !AUTO_SKIP[task.id])
+  if (selected.length === 0) {
+    console.error('✗ не выбрано ни одной проверяемой задачи')
+    return 2
+  }
+  const skipped = ids.filter((id) => AUTO_SKIP[id])
+  for (const id of skipped) process.stderr.write(`… ${id} пропущена: ${AUTO_SKIP[id]}\n`)
+
+  if (args.flags.has('dry-run')) {
+    for (const task of selected) {
+      console.log(initialMessages(task, root)[1].content)
+      console.log('\n---\n')
+    }
+    return 0
+  }
+
+  const options = {
+    root,
+    host: String(args.values.host || DEFAULT_HOST).replace(/\/$/u, ''),
+    model: String(args.values.model || 'qwen2.5-coder-16k:latest'),
+    maxCalls: Number(args.values['max-calls'] || 6),
+    timeoutMs: Number(args.values.timeout || 180) * 1000,
+  }
+
+  const rows = []
+  for (const task of selected) {
+    process.stderr.write(`… ${task.id} ${task.title}\n`)
+    try {
+      const result = await runTask(task, options)
+      const check = checkCitations(root, citationsOf(result.answer))
+      const row = summarize(task, result, check, root)
+      rows.push(row)
+      process.stderr.write(`  ${row.pass ? 'PASS' : 'FAIL'}: ${row.reason}\n`)
+    } catch (err) {
+      rows.push({
+        id: task.id, title: task.title, pass: false, reason: `ошибка: ${err.message}`,
+        steps: 0, citations: 0, fabricated: 0, badLines: 0, answer: '', trace: [],
+      })
+      process.stderr.write(`  FAIL: ${err.message}\n`)
+    }
+  }
+
+  console.log(formatSummary(rows))
+  if (args.values.out) {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      model: options.model,
+      root,
+      kind: 'auto-readonly',
+      rows,
+    }
+    writeFileSync(path.resolve(args.values.out), `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+    console.log(`\nЗаписано: ${path.resolve(args.values.out)}`)
+  }
+  return rows.some((row) => row.pass) ? 0 : 1
+}
+
+const invokedDirectly =
+  process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+if (invokedDirectly) {
+  main(process.argv.slice(2)).then((code) => {
+    process.exitCode = code
+  }).catch((err) => {
+    console.error(`✗ ${err.message}`)
+    process.exitCode = 2
+  })
+}
+
+export const SCRIPT_FILE = path.resolve(import.meta.dirname, 'agent-live.mjs')
+
+================================================================================
+ФАЙЛ: scripts/backlog.mjs  (14236 байт, 358 строк)
+================================================================================
+
+// Механизм «Что доделать.txt» ↔ «Что сделано.txt» (взят из проекта SwiftMatch).
+//
+// Идея: бэклог — только ОТКРЫТЫЕ вопросы с ID и датой проверки. Закрытый пункт
+// уходит в журнал «Что сделано.txt» развёрнутой записью, а в бэклоге остаётся
+// одна компактная строка ✅ со ссылкой. Тело под закрытой строкой — «надгробие»,
+// это FAIL. Дата «ЗАКРЫТО ДД.ММ.ГГГГ» обязана встречаться в журнале.
+//
+// Формы записей:
+//   открытая:  ### BLK-01 — Заголовок
+//               Факт: … `file:line`
+//               Статус: ⏳ (проверено 30.10.2026)
+//   закрытая:  ## ✅ BLK-01 — Заголовок (см. «Что сделано.txt»: ref) — ЗАКРЫТО 30.10.2026
+//               (тела быть не должно)
+//
+// Использование:
+//   node scripts/backlog.mjs check
+//   node scripts/backlog.mjs close --id AI-02 --ref "раздел …" [--date 30.10.2026]
+//   node scripts/backlog.mjs open --id DOC-02 --title "…" [--body "…"] [--date 30.10.2026]
+//
+// Коды выхода: 0 — готово, 1 — нарушение канона/записи, 2 — ошибка аргументов.
+
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const KIT_ROOT = path.resolve(import.meta.dirname, '..')
+export const DEFAULT_BACKLOG = path.join(KIT_ROOT, 'Что доделать.txt')
+export const DEFAULT_DONE = path.join(KIT_ROOT, 'Что сделано.txt')
+
+const ID_SRC = '[A-Z][A-Z0-9]{1,7}-\\d{2}'
+export const ITEM_ID_RE = new RegExp(`\\b(${ID_SRC})\\b`, 'u')
+export const OPEN_HEADING_RE = new RegExp(`^###\\s+(${ID_SRC})\\s*[—:-]\\s*(.+)$`, 'u')
+export const CLOSED_HEADING_RE = new RegExp(
+  `^##\\s+✅\\s+(${ID_SRC})\\b(.*?)—\\s*ЗАКРЫТО\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s*$`,
+  'u',
+)
+export const VERIFIED_RE = /\(проверено\s+\d{2}\.\d{2}\.\d{4}\)/u
+const STATUS_RE = /^Статус:\s*(.+)$/mu
+const HEADING_RE = /^#{1,6}\s+/u
+const HR_RE = /^---+\s*$/u
+const DATE_RE = /^\d{2}\.\d{2}\.\d{4}$/u
+
+export const today = (now = new Date()) =>
+  `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`
+
+const eolOf = (text) => (text.includes('\r\n') ? '\r\n' : '\n')
+
+/** Тело секции: строки до следующего заголовка любого уровня. */
+function sectionBody(lines, start) {
+  let end = start + 1
+  while (end < lines.length && !HEADING_RE.test(lines[end])) end += 1
+  return { end, body: lines.slice(start + 1, end) }
+}
+
+/**
+ * Структурный аудит бэклога:
+ *   - ID уникален и в открытых, и в закрытых;
+ *   - у открытого пункта есть «Статус: ⏳ (проверено ДД.ММ.ГГГГ)»;
+ *   - закрытая строка заканчивается «— ЗАКРЫТО ДД.ММ.ГГГГ» и не имеет тела;
+ *   - заголовки не дублируются по базе (до «(»).
+ * Возвращает { problems, openIds, closedDates }.
+ */
+export function auditBacklog(text) {
+  const lines = text.split(/\r?\n/u)
+  const problems = []
+  const seen = new Map()
+  const openIds = []
+  const closedDates = []
+  const headingBase = new Map()
+
+  const remember = (id, line) => {
+    if (seen.has(id)) {
+      problems.push(`строка ${line + 1}: ID «${id}» уже встречался в строке ${seen.get(id)}`)
+      return false
+    }
+    seen.set(id, line + 1)
+    return true
+  }
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]
+    const heading = /^#{1,6}\s+(.*)$/u.exec(line)
+    if (heading) {
+      const base = heading[1]
+        .replace(new RegExp(`^${ID_SRC}\\s*[—:-]\\s*`, 'u'), '')
+        .replace(/\s*\(.*$/u, '')
+        .trim()
+      if (base) {
+        if (headingBase.has(base)) {
+          problems.push(
+            `заголовок «${base}» дублируется: строки ${headingBase.get(base)} и ${i + 1}`,
+          )
+        } else {
+          headingBase.set(base, i + 1)
+        }
+      }
+    }
+
+    const open = OPEN_HEADING_RE.exec(line)
+    if (open) {
+      const [, id, title] = open
+      remember(id, i)
+      openIds.push(id)
+      if (!title.trim()) problems.push(`строка ${i + 1} (${id}): пустой заголовок`)
+      const { body } = sectionBody(lines, i)
+      const status = body.map((row) => STATUS_RE.exec(row)).find(Boolean)
+      if (!status) {
+        problems.push(`строка ${i + 1} (${id}): нет строки «Статус: …»`)
+      } else if (!status[1].startsWith('⏳')) {
+        problems.push(`строка ${i + 1} (${id}): статус открытого пункта должен начинаться с ⏳`)
+      } else if (!VERIFIED_RE.test(status[1])) {
+        problems.push(`строка ${i + 1} (${id}): нет даты «(проверено ДД.ММ.ГГГГ)»`)
+      }
+      continue
+    }
+
+    const closed = CLOSED_HEADING_RE.exec(line)
+    if (closed) {
+      const [, id, , date] = closed
+      remember(id, i)
+      closedDates.push(date)
+      const { body } = sectionBody(lines, i)
+      for (let j = 0; j < body.length; j += 1) {
+        const textRow = body[j].trim()
+        if (textRow === '' || HR_RE.test(textRow)) continue
+        problems.push(
+          `строка ${i + j + 2} (${id}): тело под закрытой записью — «надгробие»; детали переносить в «Что сделано.txt»`,
+        )
+      }
+    }
+  }
+
+  return { problems, openIds, closedDates }
+}
+
+/** Каждая дата «ЗАКРЫТО ДД.ММ.ГГГГ» обязана встречаться в журнале. */
+export function auditChronicle(closedDates, doneText) {
+  const problems = []
+  for (const date of new Set(closedDates)) {
+    if (!doneText.includes(date)) {
+      problems.push(
+        `дата «ЗАКРЫТО ${date}» отсутствует в «Что сделано.txt» — закрытие без развёрнутой записи`,
+      )
+    }
+  }
+  return problems
+}
+
+function assertId(id) {
+  if (!new RegExp(`^${ID_SRC}$`, 'u').test(String(id || ''))) {
+    throw new Error(`ID «${id || ''}» не формата PREFIX-NN (например BLK-01)`)
+  }
+}
+
+function assertDate(date) {
+  if (!DATE_RE.test(String(date || ''))) {
+    throw new Error(`дата «${date || ''}» не формата ДД.ММ.ГГГГ`)
+  }
+}
+
+/**
+ * Закрыть открытый пункт: убрать секцию, вставить компактную строку ✅ после
+ * первого `---`. Отказывается, если даты нет в журнале (сначала запись в
+ * «Что сделано.txt»), если пункт не найден или результат ломает канон.
+ */
+export function closeItem(text, { id, date = today(), ref = '' }, { doneText } = {}) {
+  assertId(id)
+  assertDate(date)
+  if (doneText !== undefined && !doneText.includes(date)) {
+    throw new Error(`даты ${date} нет в «Что сделано.txt»: сначала развёрнутая запись, потом закрытие`)
+  }
+
+  const eol = eolOf(text)
+  const lines = text.split(/\r?\n/u)
+  let start = -1
+  let title = ''
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = OPEN_HEADING_RE.exec(lines[i])
+    if (match && match[1] === id) {
+      start = i
+      title = match[2].trim()
+      break
+    }
+  }
+  if (start === -1) throw new Error(`открытый пункт «${id}» не найден`)
+
+  const { end } = sectionBody(lines, start)
+  const refPart = ref ? ` (см. «Что сделано.txt»: ${ref})` : ' (см. «Что сделано.txt»)'
+  const compact = `## ✅ ${id} — ${title}${refPart} — ЗАКРЫТО ${date}`
+
+  const rest = [...lines.slice(0, start), ...lines.slice(end)]
+  let hr = rest.findIndex((row) => HR_RE.test(row))
+  if (hr === -1) rest.unshift(compact, '')
+  else rest.splice(hr + 1, 0, '', compact)
+
+  const next = rest.join(eol)
+  const { problems } = auditBacklog(next)
+  if (problems.length > 0) {
+    throw new Error(`результат ломает канон: ${problems.join('; ')}`)
+  }
+  return next
+}
+
+/** Добавить открытый пункт в конец бэклога. */
+export function openItem(text, { id, title, body = '', date = today() }, { doneText } = {}) {
+  assertId(id)
+  assertDate(date)
+  if (!String(title || '').trim()) throw new Error('--title обязателен')
+
+  const { problems } = auditBacklog(text)
+  const busy =
+    problems.some((problem) => problem.includes(`«${id}»`)) ||
+    text.split(/\r?\n/u).some((row) => {
+      const open = OPEN_HEADING_RE.exec(row)
+      const closed = CLOSED_HEADING_RE.exec(row)
+      return (open && open[1] === id) || (closed && closed[1] === id)
+    })
+  if (busy) throw new Error(`ID «${id}» уже занят`)
+
+  const eol = eolOf(text)
+  const trimmed = String(body || '').trim()
+  const content = /^Статус:/mu.test(trimmed)
+    ? trimmed
+    : `${trimmed ? `${trimmed}\n\n` : ''}Статус: ⏳ (проверено ${date})`
+
+  const lines = text.split(/\r?\n/u)
+  const rules = lines.findIndex((row) => /^##\s+Правила работы/u.test(row))
+  let at = rules === -1 ? lines.length : rules
+  while (at > 0 && lines[at - 1].trim() === '') at -= 1
+  lines.splice(at, 0, '', `### ${id} — ${String(title).trim()}`, '', ...content.split('\n'), '')
+
+  const next = lines.join(eol)
+  const audit = auditBacklog(next)
+  if (audit.problems.length > 0) {
+    throw new Error(`результат ломает канон: ${audit.problems.join('; ')}`)
+  }
+  if (doneText !== undefined) {
+    const chronicle = auditChronicle(audit.closedDates, doneText)
+    if (chronicle.length > 0) throw new Error(chronicle.join('; '))
+  }
+  return next
+}
+
+export function parseArgs(argv) {
+  const mode = argv[0]
+  const out = { mode, flags: new Set(), values: {} }
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i]
+    if (!arg.startsWith('--')) throw new Error(`неизвестный аргумент: ${arg}`)
+    const key = arg.slice(2)
+    if (key === 'dry-run') {
+      out.flags.add(key)
+      continue
+    }
+    const value = argv[i + 1]
+    if (value === undefined || value.startsWith('--')) throw new Error(`--${key} требует значение`)
+    out.values[key] = value
+    i += 1
+  }
+  return out
+}
+
+function usage() {
+  return `Механизм «Что доделать.txt» ↔ «Что сделано.txt».
+
+  node scripts/backlog.mjs check [--file <бэклог>] [--done <журнал>]
+  node scripts/backlog.mjs close --id <PREFIX-NN> [--ref <ссылка>] [--date ДД.ММ.ГГГГ] [--dry-run]
+  node scripts/backlog.mjs open  --id <PREFIX-NN> --title "<заголовок>" [--body "<текст>"] [--date ДД.ММ.ГГГГ] [--dry-run]
+
+Открытый пункт: ### ID — заголовок + «Статус: ⏳ (проверено ДД.ММ.ГГГГ)».
+Закрытый: одна строка «## ✅ ID — … — ЗАКРЫТО ДД.ММ.ГГГГ», без тела.
+`
+}
+
+function main(argv) {
+  let args
+  try {
+    args = parseArgs(argv)
+  } catch (err) {
+    console.error(`✗ ${err.message}`)
+    return 2
+  }
+
+  if (!args.mode || args.mode === '--help' || args.mode === '-h') {
+    console.log(usage())
+    return args.mode ? 0 : 2
+  }
+  if (!['check', 'close', 'open'].includes(args.mode)) {
+    console.error(`✗ неизвестная команда: ${args.mode}`)
+    console.error(usage())
+    return 2
+  }
+
+  const file = path.resolve(args.values.file || DEFAULT_BACKLOG)
+  const doneFile = path.resolve(args.values.done || DEFAULT_DONE)
+  if (!existsSync(file)) {
+    console.error(`✗ нет файла бэклога: ${file}`)
+    return 2
+  }
+  const text = readFileSync(file, 'utf8')
+  const doneText = existsSync(doneFile) ? readFileSync(doneFile, 'utf8') : ''
+  const dryRun = args.flags.has('dry-run')
+
+  try {
+    if (args.mode === 'check') {
+      const audit = auditBacklog(text)
+      const problems = [...audit.problems, ...auditChronicle(audit.closedDates, doneText)]
+      console.log(
+        `Бэклог: открытых ${audit.openIds.length}, закрытых ${audit.closedDates.length}, ` +
+          `строк ${text.split(/\r?\n/u).length}`,
+      )
+      if (problems.length > 0) {
+        for (const problem of problems) console.error(`✗ ${problem}`)
+        console.error(`\nИтог: FAIL (${problems.length}).`)
+        return 1
+      }
+      console.log('Итог: канон бэклога соблюдён ✓')
+      return 0
+    }
+
+    if (args.mode === 'close') {
+      const next = closeItem(
+        text,
+        { id: args.values.id, date: args.values.date || today(), ref: args.values.ref || '' },
+        { doneText },
+      )
+      if (!dryRun) writeFileSync(file, next, 'utf8')
+      console.log(`✓ закрыт пункт ${args.values.id}${dryRun ? ' (dry-run, файл не изменён)' : ''}`)
+      return 0
+    }
+
+    const next = openItem(
+      text,
+      {
+        id: args.values.id,
+        title: args.values.title,
+        body: args.values.body || '',
+        date: args.values.date || today(),
+      },
+      { doneText },
+    )
+    if (!dryRun) writeFileSync(file, next, 'utf8')
+    console.log(`✓ открыт пункт ${args.values.id}${dryRun ? ' (dry-run, файл не изменён)' : ''}`)
+    return 0
+  } catch (err) {
+    console.error(`✗ ${err.message}`)
+    return 1
+  }
+}
+
+const invokedDirectly =
+  process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+if (invokedDirectly) {
+  process.exitCode = main(process.argv.slice(2))
+}
+
+export const SCRIPT_FILE = fileURLToPath(import.meta.url)

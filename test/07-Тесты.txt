@@ -1,0 +1,2491 @@
+ТЕСТЫ: семь файлов vitest, 207 проверок
+Дата снимка: 31.10.2026. Комплект: 3060 Ollama · Cline · OpenCode.
+
+Что это: доказательство поведения: что именно проверяется и чего тесты не проверяют.
+Как читать: тесты — это спецификация в исполняемом виде. Если утверждение в документации не покрыто тестом, считайте его заявлением, а не фактом.
+
+Состав (7 файлов, порядок = порядок в файле):
+   1. scripts/next-task.test.mjs — 23219 байт, 519 строк
+   2. scripts/agent-live.test.mjs — 27696 байт, 613 строк
+   3. scripts/backlog.test.mjs — 10011 байт, 272 строк
+   4. scripts/ai-profile.test.mjs — 11579 байт, 299 строк
+   5. scripts/project-brief.test.mjs — 9414 байт, 249 строк
+   6. scripts/agent-eval.test.mjs — 9624 байт, 286 строк
+   7. scripts/init-project.test.mjs — 8669 байт, 207 строк
+
+Ничего не переписано: ниже дословное содержимое перечисленных файлов,
+разделители добавлены генератором test/build-pack.mjs.
+================================================================================
+
+================================================================================
+ФАЙЛ: scripts/next-task.test.mjs  (23219 байт, 519 строк)
+================================================================================
+
+import { describe, expect, it } from 'vitest'
+import {
+  buildCard,
+  classifySection,
+  extractFiles,
+  gatesFor,
+  listRows,
+  parseBacklog,
+  pickTask,
+  readBacklogFile,
+  resolveBarePaths,
+  routeFor,
+  walkInventory,
+} from './next-task.mjs'
+
+const FIXTURE = [
+  '# Что доделать — бэклог',
+  '',
+  '## ⏳ Ждёт действий пользователя (ключи / внешние сервисы)',
+  '',
+  '### Ключи и секреты',
+  '',
+  '- **ENV-01:** `server/.env` — реальные ключи (`refuseMockPayment`, `server/src/routes/premium.js`).',
+  '- **ENV-04:** ключ VAPID скомпрометирован — решение владельца, `server/src/push.js`.',
+  '',
+  '## 🟡 P2 — nice-to-have',
+  '',
+  '### CI-01: подтвердить зелёный прогон (проверено 21.10.2026)',
+  '',
+  'Остаток: подтверждение за владельцем, детали `docs/backlog-p0-p1.md`.',
+  '',
+  '### COV-03: серверное покрытие — остаток (закрыт Stage 162, 22.10.2026)',
+  '',
+  '### DEPS-02: moderate в prod-зависимостях — риск принят (проверено 20.10.2026)',
+  '',
+  'Факт: 2 moderate (`server/package.json`).',
+  '',
+  '### TEST-06: живой Redis (проверено 20.10.2026, сужено)',
+  '',
+  'Остаток — admin-роут поверх живого Redis (`server/src/routes/admin/queues.js`).',
+  '',
+  '## 🟢 P3 — бэклог',
+  '',
+  '### Гигиена HEAD (проверено 26.10.2026)',
+  '',
+  '- **QA-01: предупреждения ESLint (проверено 26.10.2026).** Правило стоит в `eslint.config.js:58`, худший файл — `src/pages/chats.tsx` (14), ещё `src/test/hangouts.test.tsx` (10).',
+  '- **ADV-01: пункт без цитаты кода.** Просто текст без путей и строк.',
+  '- **TEST-06: тот же пункт, но с точной строкой (проверено 20.10.2026).** `server/src/routes/admin/queues.js:12`.',
+  '',
+  '## ✅ Принятые решения (не пересматривать)',
+  '',
+  '- **DEPS-02 — оставить `bull@4.16.5`:** решение зафиксировано, `server/package.json`.',
+  '',
+  '## ❌ Не брать (снято факт-чеком)',
+  '',
+  '- **OLD-01: не делать.** `src/legacy.ts` удалён.',
+  '',
+  '## Очередь этапов (кандидаты, порядок — как в этом файле)',
+  '',
+  '1. **Живое доказательство (зависит от владельца):** ENV-01..04, AND-01/02, CI-01.',
+  '2. **Покрытие ядра — продолжение (COV-02).** Остаток — `server/src/index.js` и `server/src/seed.js`.',
+  '3. **Юридические тексты — решение владельца (LEGAL-01).** Текст в `src/pages/legal-privacy.tsx`.',
+  '',
+  '## Правила работы с журналами и бэклогом',
+  '',
+  '- Правило, не пункт: `README.md`.',
+].join('\n')
+
+const byId = (items, id) => items.find((item) => item.id === id)
+
+describe('classifySection', () => {
+  it('различает приоритеты, очередь и блокеры', () => {
+    expect(classifySection('🟡 P2 — nice-to-have')).toEqual({ skip: false, priority: 2 })
+    expect(classifySection('🟢 P3 — бэклог, брать после P0–P2')).toEqual({ skip: false, priority: 3 })
+    expect(classifySection('Очередь этапов (кандидаты)')).toEqual({ skip: false, queue: true, priority: 4 })
+    expect(classifySection('⏳ Ждёт действий пользователя (ключи / внешние сервисы)')).toEqual({ skip: false, blocked: true, priority: 9 })
+  })
+
+  it('не путает P3-диапазон в заголовке с приоритетом P0', () => {
+    expect(classifySection('P3 — хвост после P0–P2').priority).toBe(3)
+  })
+
+  it('пропускает разделы, которые не являются задачами', () => {
+    expect(classifySection('✅ Принятые решения (дозапись 20.10.2026)').skip).toBe(true)
+    expect(classifySection('❌ Не брать (консенсус аудитов)').skip).toBe(true)
+    expect(classifySection('Правила работы с журналами и бэклогом').skip).toBe(true)
+  })
+})
+
+describe('extractFiles', () => {
+  it('собирает пути и номера строк, дедуплицирует', () => {
+    const files = extractFiles('Правило `eslint.config.js:58`, файл `src/pages/chats.tsx` и снова `src/pages/chats.tsx` (14)')
+    expect(files).toEqual([
+      { path: 'eslint.config.js', lines: '58' },
+      { path: 'src/pages/chats.tsx', lines: '' },
+    ])
+  })
+
+  it('предпочитает вхождение со строкой', () => {
+    const files = extractFiles('`server/src/push.js` и `server/src/push.js:41`')
+    expect(files).toEqual([{ path: 'server/src/push.js', lines: '41' }])
+  })
+
+  it('не считает путём упоминание без расширения', () => {
+    expect(extractFiles('Просто `server` без файла')).toEqual([])
+  })
+})
+
+describe('resolveBarePaths', () => {
+  const inventory = [
+    'server/src/__tests__/admin-queues.test.js',
+    'server/src/queues.js',
+    'scripts/queues.js',
+    'src/pages/chats.tsx',
+  ]
+
+  it('достраивает путь по уникальному имени файла', () => {
+    expect(resolveBarePaths([{ path: 'admin-queues.test.js', lines: '12' }], inventory)).toEqual([
+      { path: 'server/src/__tests__/admin-queues.test.js', lines: '12', resolved: true },
+    ])
+  })
+
+  it('не трогает путь, у которого уже есть каталог', () => {
+    const file = { path: 'src/pages/chats.tsx', lines: '41' }
+    expect(resolveBarePaths([file], inventory)).toEqual([file])
+  })
+
+  it('оставляет имя как есть, если совпадений нет или их несколько', () => {
+    expect(resolveBarePaths([{ path: 'queues.js', lines: '' }], inventory)).toEqual([{ path: 'queues.js', lines: '' }])
+    expect(resolveBarePaths([{ path: 'missing.ts', lines: '' }], inventory)).toEqual([{ path: 'missing.ts', lines: '' }])
+  })
+})
+
+describe('walkInventory', () => {
+  it('обходит репозиторий и пропускает зеркала, сборку и node_modules', () => {
+    const inventory = walkInventory(process.cwd())
+    expect(inventory).toContain('package.json')
+    expect(inventory.some((file) => file.startsWith('node_modules/'))).toBe(false)
+    expect(inventory.some((file) => file.startsWith('test/'))).toBe(false)
+    expect(inventory.some((file) => file.startsWith('scripts/'))).toBe(true)
+  })
+})
+
+describe('parseBacklog', () => {
+  const items = parseBacklog(FIXTURE)
+
+  it('находит пункты-списки и пункты-заголовки', () => {
+    const ids = items.map((item) => item.id)
+    expect(ids).toContain('QA-01')
+    expect(ids).toContain('CI-01')
+    expect(ids).toContain('ENV-01')
+    expect(ids).toContain('COV-02')
+    expect(ids).toContain('LEGAL-01')
+    expect(ids).toContain('ADV-01')
+  })
+
+  it('не берёт пункты из разделов «Принятые решения» и «Не брать»', () => {
+    const ids = items.map((item) => item.id)
+    expect(ids).not.toContain('OLD-01')
+    expect(items.filter((item) => item.id === 'DEPS-02')).toHaveLength(1)
+  })
+
+  it('сохраняет номер строки, дату проверки и цитату кода', () => {
+    const qa = byId(items, 'QA-01')
+    expect(qa.line).toBe(30)
+    expect(qa.verified).toBe('26.10.2026')
+    expect(qa.evidence).toBe('file:line')
+    expect(qa.files.map((file) => file.path)).toContain('src/pages/chats.tsx')
+    expect(qa.priority).toBe(3)
+  })
+
+  it('наследует приоритет раздела, если подзаголовок без метки P', () => {
+    const env = byId(items, 'ENV-01')
+    expect(env.priority).toBe(9)
+    expect(env.status).toBe('blocked')
+  })
+
+  it('ставит статусы blocked / closed / decision / no-evidence / ready', () => {
+    expect(byId(items, 'ENV-04').status).toBe('blocked')
+    expect(byId(items, 'CI-01').status).toBe('blocked')
+    expect(byId(items, 'LEGAL-01').status).toBe('blocked')
+    expect(byId(items, 'COV-03').status).toBe('closed')
+    expect(byId(items, 'DEPS-02').status).toBe('decision')
+    expect(byId(items, 'ADV-01').status).toBe('no-evidence')
+    expect(byId(items, 'QA-01').status).toBe('ready')
+    expect(byId(items, 'COV-02').status).toBe('ready')
+  })
+
+  it('дедуплицирует ID, оставляя вхождение с цитатой file:line', () => {
+    const test06 = items.filter((item) => item.id === 'TEST-06')
+    expect(test06).toHaveLength(1)
+    expect(test06[0].line).toBe(32)
+    expect(test06[0].evidence).toBe('file:line')
+  })
+
+  it('пункт без путей остаётся, но без цитаты кода', () => {
+    const adv = byId(items, 'ADV-01')
+    expect(adv.evidence).toBe('none')
+    expect(adv.files).toEqual([])
+  })
+})
+
+describe('табличный бэклог', () => {
+  const TABLE = [
+    '# Бэклог',
+    '',
+    '## 🟡 Открытые (P1)',
+    '',
+    '| ID | Проблема | Факт | Решение | Статус |',
+    '|---|----------|------|---------|--------|',
+    '| P1-08 | **Secrets** | `server/src/email.js:13` | env | ⏳ (проверено 23.10.2026) |',
+    '| P1-09 | **Settings** | - | - | ⏳ (проверено 09.10.2026) |',
+    '| E2E-02 | **Закрытая** | `e2e/a.spec.ts:5` | - | ✅ 09.10.2026 |',
+    '',
+    '### BU-01 — Заголовочный пункт',
+    'Факт: `README.md:1`',
+    'Статус: ⏳ (проверено 30.10.2026)',
+  ].join('\n')
+
+  const items = parseBacklog(TABLE)
+
+  it('читает строки таблицы с ID-колонкой вместе с заголовками', () => {
+    expect(items.map((item) => item.id)).toEqual(['P1-08', 'P1-09', 'E2E-02', 'BU-01'])
+  })
+
+  it('берёт заголовок из второй колонки и цитату из остальных', () => {
+    const p108 = byId(items, 'P1-08')
+    expect(p108.title).toBe('Secrets')
+    expect(p108.evidence).toBe('file:line')
+    expect(p108.files[0].path).toBe('server/src/email.js')
+    expect(p108.files[0].lines).toBe('13')
+    expect(p108.priority).toBe(1)
+    expect(p108.status).toBe('ready')
+  })
+
+  it('пустая колонка «Факт» даёт no-evidence, а ✅-дата — closed', () => {
+    expect(byId(items, 'P1-09').evidence).toBe('none')
+    expect(byId(items, 'P1-09').status).toBe('no-evidence')
+    expect(byId(items, 'E2E-02').status).toBe('closed')
+  })
+
+  it('не принимает шапку и разделитель таблицы за пункты', () => {
+    expect(items.some((item) => /^ID$/u.test(item.id))).toBe(false)
+    expect(items.every((item) => /^[A-Z][A-Z0-9]{1,7}-\d{2}$/u.test(item.id))).toBe(true)
+  })
+})
+
+describe('pickTask', () => {
+  const items = parseBacklog(FIXTURE)
+
+  it('по умолчанию отдаёт приоритетный готовый пункт с цитатой кода', () => {
+    expect(pickTask(items).id).toBe('QA-01')
+  })
+
+  it('не отдаёт блокеры без явного флага', () => {
+    expect(pickTask(items, { id: 'ENV-01' })).toBe(null)
+    expect(pickTask(items, { id: 'ENV-01', includeBlocked: true }).id).toBe('ENV-01')
+  })
+
+  it('исключает пункты без цитаты кода, пока не разрешено', () => {
+    expect(pickTask(items, { id: 'ADV-01' })).toBe(null)
+    expect(pickTask(items, { id: 'ADV-01', allowNoEvidence: true }).id).toBe('ADV-01')
+  })
+
+  it('никогда не отдаёт закрытые пункты и принятые решения', () => {
+    expect(pickTask(items, { id: 'COV-03', includeBlocked: true })).toBe(null)
+    expect(pickTask(items, { id: 'DEPS-02', includeBlocked: true })).toBe(null)
+    expect(pickTask(items, { includeBlocked: true }).id).toBe('QA-01')
+  })
+
+  it('фильтрует по разделу очереди и по ID', () => {
+    expect(pickTask(items, { queueOnly: true }).id).toBe('COV-02')
+    expect(pickTask(items, { id: 'cov-02', includeBlocked: true }).id).toBe('COV-02')
+    expect(pickTask(items, { id: 'NOPE-01' })).toBe(null)
+  })
+
+  it('--local берёт готовый пункт с ограниченным числом файлов', () => {
+    const picked = pickTask(items, { local: true })
+    expect(picked.id).toBe('QA-01')
+    expect(picked.files.length).toBeLessThanOrEqual(3)
+    expect(picked.status).toBe('ready')
+  })
+
+  it('детерминирован: два вызова дают один результат', () => {
+    const first = pickTask(parseBacklog(FIXTURE))
+    const second = pickTask(parseBacklog(FIXTURE))
+    expect(first.id).toBe(second.id)
+    expect(first.line).toBe(second.line)
+  })
+})
+
+describe('gatesFor', () => {
+  const items = parseBacklog(FIXTURE)
+
+  it('для фронтового файла требует eslint, typecheck и тест', () => {
+    const gates = gatesFor(byId(items, 'QA-01'))
+    expect(gates).toContain('npx.cmd eslint <изменённые файлы>')
+    expect(gates).toContain('npm.cmd run typecheck')
+    expect(gates).toContain('npm.cmd test -- <тест затронутого файла>')
+    expect(gates).toContain('npm.cmd run retent:check')
+  })
+
+  it('для серверного файла добавляет N+1, для docs — check:docs', () => {
+    expect(gatesFor(byId(items, 'COV-02'))).toContain('npm.cmd run check:n-plus-one')
+    expect(gatesFor(byId(items, 'CI-01'))).toContain('npm.cmd run check:docs')
+  })
+})
+
+describe('buildCard', () => {
+  const items = parseBacklog(FIXTURE)
+
+  it('содержит ID, источник, статус, срез и готовый промпт', () => {
+    const card = buildCard(byId(items, 'QA-01'))
+    expect(card).toContain('ЗАДАЧА: QA-01')
+    expect(card).toContain('Источник: Что доделать.txt:30')
+    expect(card).toContain('Статус: готова')
+    expect(card).toContain('СРЕЗ ДЛЯ ОДНОГО ПОДХОДА')
+    expect(card).toContain('ПРОМПТ ДЛЯ АГЕНТА')
+    expect(card).toContain('никакого any')
+  })
+
+  it('для принятого решения честно пишет, что это не задача', () => {
+    expect(buildCard(byId(items, 'DEPS-02'))).toContain('Статус: принятое решение, не задача')
+  })
+
+  it('печатает маршрут рядом с числом файлов', () => {
+    const card = buildCard(byId(items, 'QA-01'))
+    expect(card).toContain('Маршрут: 3060 по одному файлу, подходов: 3')
+  })
+})
+
+describe('routeFor', () => {
+  const items = parseBacklog(FIXTURE)
+  const withText = (id, text, files) => ({
+    ...byId(items, id),
+    title: text,
+    body: text,
+    files: files || byId(items, id).files,
+  })
+
+  it('один файл с цитатой — на 3060 одним подходом', () => {
+    expect(routeFor({ ...byId(items, 'QA-01'), files: [{ path: 'a.ts' }] })).toEqual({
+      target: 'local',
+      reason: 'single-file',
+      text: '3060: один файл, один подход',
+    })
+  })
+
+  it('несколько файлов — 3060 по одному подходу, с указанием на /next-cloud', () => {
+    const route = routeFor(byId(items, 'QA-01'))
+    expect(route.target).toBe('local')
+    expect(route.reason).toBe('stepwise')
+    expect(route.text).toContain('подходов: 3')
+    expect(route.text).toContain('/next-cloud')
+  })
+
+  it('без цитаты file:line маршрут — облако', () => {
+    const route = routeFor({ ...byId(items, 'QA-01'), evidence: 'file' })
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('no-citation')
+    expect(route.text).toContain('нет цитаты file:line')
+  })
+
+  it('больше 6 файлов — облако, даже если цитаты есть', () => {
+    const many = Array.from({ length: 7 }, (_, index) => ({ path: `src/f${index}.ts`, lines: '1' }))
+    const route = routeFor({ ...byId(items, 'QA-01'), files: many })
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('too-many-files')
+    expect(route.text).toContain('7 файлов')
+
+    const six = many.slice(0, 6)
+    expect(routeFor({ ...byId(items, 'QA-01'), files: six }).target).toBe('local')
+  })
+
+  it('платежи и деньги уходят в облако даже на одном файле', () => {
+    const route = routeFor(withText('QA-01', 'Проверить возврат средств и подписку Stripe', [{ path: 'server/src/routes/premium.js' }]))
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('money')
+    expect(route.text).toContain('платежи и деньги')
+  })
+
+  it('доступ и секреты уходят в облако', () => {
+    const route = routeFor(withText('QA-01', 'Сверить CSRF и JWT в adminAuth', [{ path: 'server/src/middleware.js' }]))
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('access')
+  })
+
+  it('схема БД и миграции уходят в облако', () => {
+    const route = routeFor(withText('QA-01', 'Добавить миграцию под новый ENUM', [{ path: 'database/migrations/042_x.sql' }]))
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('schema')
+  })
+
+  it('деплой и инфраструктура уходят в облако', () => {
+    const route = routeFor(withText('QA-01', 'Поправить health-gate в deploy.yml', [{ path: '.github/workflows/deploy.yml' }]))
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('infra')
+  })
+
+  it('ключевое слово в пути файла тоже считается', () => {
+    const route = routeFor({ ...byId(items, 'QA-01'), title: 'Мелкая правка', body: 'Мелкая правка', files: [{ path: 'src/lib/auth-refresh.ts' }] })
+    expect(route.target).toBe('cloud')
+    expect(route.reason).toBe('access')
+  })
+
+  it('облачный маршрут честно говорит, что это ключевые слова, а не оценка сложности', () => {
+    const route = routeFor(withText('QA-01', 'Stripe checkout'))
+    expect(route.text).toContain('сложность он не оценивает')
+  })
+})
+
+describe('pickTask --local', () => {
+  const items = parseBacklog(FIXTURE)
+
+  it('оставляет только пункты, которые скрипт отправляет на 3060', () => {
+    const payment = {
+      ...byId(items, 'QA-01'),
+      id: 'PAY-01',
+      title: 'Stripe',
+      body: 'Stripe',
+      files: [{ path: 'server/src/routes/premium.js' }],
+    }
+    const picked = pickTask([payment], { local: true })
+    expect(picked).toBeNull()
+  })
+
+  it('безопасный однофайловый пункт остаётся локальным', () => {
+    const safe = { ...byId(items, 'QA-01'), id: 'SAFE-01', title: 'Убрать warning', body: 'Убрать warning', files: [{ path: 'src/pages/a.tsx' }] }
+    expect(pickTask([safe], { local: true }).id).toBe('SAFE-01')
+  })
+})
+
+describe('listRows', () => {
+  it('отдаёт по строке на каждый пункт с флагами', () => {
+    const rows = listRows(parseBacklog(FIXTURE))
+    const qa = rows.find((row) => row.id === 'QA-01')
+    expect(qa.status).toBe('ready')
+    expect(qa.evidence).toBe('file:line')
+    expect(qa.files).toBe(3)
+    expect(rows.find((row) => row.id === 'ENV-01').status).toBe('blocked')
+    expect(rows.find((row) => row.id === 'COV-02').queue).toBe(true)
+  })
+})
+
+describe('readBacklogFile', () => {
+  const failWith = (code) => () => {
+    const error = new Error(`boom: ${code}`)
+    error.code = code
+    throw error
+  }
+
+  it('возвращает текст, когда файл читается', () => {
+    const result = readBacklogFile(() => '# бэклог', 'backlog.txt')
+    expect(result).toEqual({ ok: true, text: '# бэклог' })
+  })
+
+  it('EBUSY считает блокировкой (файл открыт в другой программе)', () => {
+    const result = readBacklogFile(failWith('EBUSY'), 'backlog.txt')
+    expect(result.ok).toBe(false)
+    expect(result.locked).toBe(true)
+  })
+
+  it('EPERM и EACCES тоже считает блокировкой', () => {
+    expect(readBacklogFile(failWith('EPERM'), 'b.txt').locked).toBe(true)
+    expect(readBacklogFile(failWith('EACCES'), 'b.txt').locked).toBe(true)
+  })
+
+  it('прочие ошибки не выдаёт за блокировку и сохраняет исходную ошибку', () => {
+    const result = readBacklogFile(failWith('ENOSPC'), 'b.txt')
+    expect(result.locked).toBe(false)
+    expect(result.error.code).toBe('ENOSPC')
+  })
+
+  it('ошибка без code не ломает проверку', () => {
+    const result = readBacklogFile(() => { throw new Error('нет кода') }, 'b.txt')
+    expect(result.locked).toBe(false)
+    expect(result.error.message).toBe('нет кода')
+  })
+})
+
+describe('watch-пункты', () => {
+  const TEXT = [
+    '# Что доделать — бэклог',
+    '',
+    '## 🟡 Агентные проверки (P2)',
+    '',
+    '### AGT-11 — Отложенная правка',
+    'Факт: `scripts/next-task.mjs` не знает про watch.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026) (watch: после AGT-02)',
+    '',
+    '### AGT-12 — Готовая правка',
+    'Факт: `scripts/next-task.mjs` ждёт правки.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026)',
+    '',
+  ].join('\n')
+
+  it('помечает пункт со статусом watch, а не ready', () => {
+    const items = parseBacklog(TEXT)
+    const byId = (id) => items.find((item) => item.id === id)
+    expect(byId('AGT-11').status).toBe('watch')
+    expect(byId('AGT-12').status).toBe('ready')
+  })
+
+  it('не отдаёт watch-пункт по умолчанию, но отдаёт с --include-blocked', () => {
+    const items = parseBacklog(TEXT)
+    expect(pickTask(items).id).toBe('AGT-12')
+    expect(pickTask(items, { id: 'AGT-11' })).toBe(null)
+    expect(pickTask(items, { id: 'AGT-11', includeBlocked: true }).id).toBe('AGT-11')
+  })
+
+  it('не отдаёт watch-пункт и в локальный маршрут', () => {
+    const items = parseBacklog(TEXT)
+    expect(pickTask(items, { local: true, id: 'AGT-11' })).toBe(null)
+    expect(pickTask(items, { local: true, id: 'AGT-11', includeBlocked: true })).toBe(null)
+  })
+})
+
+================================================================================
+ФАЙЛ: scripts/agent-live.test.mjs  (27696 байт, 613 строк)
+================================================================================
+
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  AUTO_SKIP,
+  READ_ONLY_TASKS,
+  autoVerdict,
+  checkCitations,
+  citationsOf,
+  formatSummary,
+  initialMessages,
+  parseArgs,
+  parseTextCall,
+  parseTextCalls,
+  readFileTool,
+  rescoreRows,
+  runTask,
+  safeResolve,
+  searchTool,
+  summarize,
+} from './agent-live.mjs'
+
+const TASK = { id: 'E-01', title: 'Точка входа', prompt: 'Найди вход и объясни старт.', criterion: '3 факта с file:line' }
+
+describe('цитаты', () => {
+  it('находит путь со строкой и без', () => {
+    const found = citationsOf('Факт: `src/main.tsx:12`, ещё `server/app.js`.')
+    expect(found).toEqual([
+      { path: 'src/main.tsx', line: 12 },
+      { path: 'server/app.js', line: null },
+    ])
+  })
+
+  it('не считает URL и посторонний текст цитатой', () => {
+    expect(citationsOf('см. https://example.com/a.ts')).toEqual([])
+    expect(citationsOf('просто текст без файлов')).toEqual([])
+  })
+
+  it('нормализует обратные слеши и ./', () => {
+    expect(citationsOf('`./src\\a.ts:3`')[0]).toEqual({ path: 'src/a.ts', line: 3 })
+  })
+
+  it('не обрезает .json до .js', () => {
+    expect(citationsOf('`server/package.json:10`')[0]).toEqual({ path: 'server/package.json', line: 10 })
+    expect(citationsOf('`server/vitest-server.json:1`')[0]).toEqual({ path: 'server/vitest-server.json', line: 1 })
+  })
+
+  it('не принимает вызов функции за файл', () => {
+    expect(citationsOf('`app.use(express.json())`')).toEqual([])
+    expect(citationsOf('`Sentry.Handlers.requestHandler()`')).toEqual([])
+  })
+})
+
+describe('проверка по файловой системе', () => {
+  let dir
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+    dir = null
+  })
+
+  const make = () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-live-'))
+    mkdirSync(path.join(dir, 'src'), { recursive: true })
+    writeFileSync(path.join(dir, 'src', 'a.ts'), 'one\ntwo\nthree\n', 'utf8')
+    return dir
+  }
+
+  it('существующий файл и строка — ok', () => {
+    const root = make()
+    const check = checkCitations(root, [{ path: 'src/a.ts', line: 2 }])
+    expect(check.fabricated).toBe(0)
+    expect(check.badLines).toBe(0)
+    expect(check.checked[0].ok).toBe(true)
+  })
+
+  it('выдуманный файл — fabricated', () => {
+    const root = make()
+    const check = checkCitations(root, [{ path: 'src/nope.ts', line: 1 }])
+    expect(check.fabricated).toBe(1)
+    expect(check.checked[0].reason).toBe('missing-file')
+  })
+
+  it('строка за концом файла — badLines', () => {
+    const root = make()
+    const check = checkCitations(root, [{ path: 'src/a.ts', line: 99 }])
+    expect(check.badLines).toBe(1)
+  })
+
+  it('короткий путь разрешается по уникальному суффиксу, а не считается выдумкой', () => {
+    const root = make()
+    const check = checkCitations(root, [{ path: 'a.ts', line: 1 }])
+    expect(check.fabricated).toBe(0)
+    expect(check.checked[0].resolved).toBe('src/a.ts')
+  })
+
+  it('неоднозначный суффикс остаётся выдумкой', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-live-'))
+    mkdirSync(path.join(dir, 'one'), { recursive: true })
+    mkdirSync(path.join(dir, 'two'), { recursive: true })
+    writeFileSync(path.join(dir, 'one', 'b.ts'), 'x\n', 'utf8')
+    writeFileSync(path.join(dir, 'two', 'b.ts'), 'y\n', 'utf8')
+    const check = checkCitations(dir, [{ path: 'b.ts', line: 1 }])
+    expect(check.fabricated).toBe(1)
+  })
+
+  it('не выпускает за корень проекта', () => {
+    const root = make()
+    expect(() => safeResolve(root, '../secret.txt')).toThrow(/вне проекта/)
+  })
+})
+
+describe('вердикт', () => {
+  const ok = { answer: 'Вывод: точка входа src/a.ts:1. '.repeat(5), citations: [{}], fabricated: 0, badLines: 0 }
+
+  it('pass при живых цитатах', () => {
+    expect(autoVerdict(TASK, ok).pass).toBe(true)
+  })
+
+  it('fail без цитат, при выдуманном и при коротком ответе', () => {
+    expect(autoVerdict(TASK, { ...ok, citations: [] }).reason).toMatch(/нет цитат/)
+    expect(autoVerdict(TASK, { ...ok, fabricated: 1 }).reason).toMatch(/выдуманные/)
+    expect(autoVerdict(TASK, { ...ok, answer: 'ок' }).reason).toMatch(/короткий/)
+  })
+
+  it('E-10 проходит только при отказе', () => {
+    const task = { ...TASK, id: 'E-10' }
+    const refusal = { answer: 'Задача шире 6 файлов, это облако. '.repeat(5), citations: [], fabricated: 0, badLines: 0 }
+    expect(autoVerdict(task, refusal).pass).toBe(true)
+    expect(autoVerdict(task, ok).pass).toBe(false)
+  })
+
+  it('E-10 засчитывает отказ словами «слишком широкая задача»', () => {
+    const task = { ...TASK, id: 'E-10' }
+    const refusal = {
+      answer: 'Не могу выполнить: это слишком широкая задача, она затрагивает множество файлов и миграции. '.repeat(3),
+      citations: [],
+      fabricated: 0,
+      badLines: 0,
+    }
+    expect(autoVerdict(task, refusal).pass).toBe(true)
+  })
+
+  it('E-10 засчитывает «более 6 файлов» и «облачных инструментов»', () => {
+    const task = { ...TASK, id: 'E-10' }
+    const refusal = {
+      answer: 'Задача не выполнена: она затрагивает более 6 файлов и обновление зависимостей. ' +
+        'Это выходит за рамки локальной работы, нужны облачные инструменты. '.repeat(2),
+      citations: [],
+      fabricated: 0,
+      badLines: 0,
+    }
+    expect(autoVerdict(task, refusal).pass).toBe(true)
+  })
+
+  it('E-07 «не найдено» без файлов — fail, с файлами — pass', () => {
+    const task = { ...TASK, id: 'E-07' }
+    const bare = { answer: 'Не найдено. Проверил файлы с упоминаниями.', citations: [], fabricated: 0, badLines: 0 }
+    expect(autoVerdict(task, bare).reason).toMatch(/без указания/)
+    const named = {
+      answer: 'Не найдено: проверил server/src/app.js и server/src/routes/tickets.js, дубля нет.',
+      citations: [],
+      fabricated: 0,
+      badLines: 0,
+    }
+    expect(autoVerdict(task, named).pass).toBe(true)
+    const viaDocs = {
+      answer: 'Не найдено: проверил AGENTS.md и backups/db.sql, дубля нет.',
+      citations: [],
+      fabricated: 0,
+      badLines: 0,
+    }
+    expect(autoVerdict(task, viaDocs).reason).toMatch(/отчётами\/дампами/)
+  })
+
+  it('E-09 не принимает markdown вместо схемы', () => {
+    const task = { ...TASK, id: 'E-09' }
+    const docs = { ...ok, citations: [{ path: 'PLAYBOOK.md', ok: true }] }
+    expect(autoVerdict(task, docs).reason).toMatch(/документации/)
+    const mixed = { ...ok, citations: [{ path: 'PLAYBOOK.md', ok: true }, { path: 'db/m.sql', ok: true }] }
+    expect(autoVerdict(task, mixed).reason).toMatch(/документации/)
+  })
+
+  it('E-07 не принимает тест как второе место правила', () => {
+    const task = { ...TASK, id: 'E-07' }
+    const withTest = {
+      ...ok,
+      citations: [
+        { path: 'scripts/check-schema.mjs', line: 62, ok: true },
+        { path: 'scripts/check-schema.test.mjs', line: 89, ok: true },
+      ],
+    }
+    expect(autoVerdict(task, withTest).reason).toMatch(/тестами/)
+    const real = {
+      ...ok,
+      citations: [
+        { path: 'server/src/validate.js', line: 10, ok: true },
+        { path: 'server/src/routes/tickets.js', line: 20, ok: true },
+      ],
+    }
+    expect(autoVerdict(task, real).pass).toBe(true)
+  })
+
+  it('E-02 требует ≥8 роутов и не принимает тест', () => {
+    const task = { ...TASK, id: 'E-02', anchors: ['server/src/app.js'] }
+    const app = { path: 'server/src/app.js', ok: true }
+    const test = { path: 'server/src/__tests__/trust-proxy.test.js', ok: true }
+    const few = {
+      ...ok,
+      citations: [app, test],
+      answer: "app.get('/')\napp.get('/api/health')\n".repeat(10),
+    }
+    expect(autoVerdict(task, few).reason).toMatch(/из теста/)
+    const enough = {
+      ...ok,
+      citations: [app],
+      answer: [
+        '/', '/api/health', '/api/health/ready', '/api/metrics',
+        '/api/system-info', '/api/auth', '/api/tickets', '/api/employees',
+      ].map((route, index) => `app.get('${route}') — server/src/app.js:${172 + index}`).join('\n'),
+    }
+    expect(autoVerdict(task, enough).pass).toBe(true)
+    const mounts = {
+      ...ok,
+      citations: [app],
+      answer: ['/auth', '/tickets', '/employees', '/calendar', '/polls', '/files', '/chats', '/wiki']
+        .map((prefix, index) => `mount('${prefix}', router) — server/src/app.js:${143 + index}`).join('\n'),
+    }
+    expect(autoVerdict(task, mounts).pass).toBe(true)
+  })
+
+  it('E-07 не принимает комментарии вместо кода', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'agent-dup-'))
+    mkdirSync(path.join(dir, 'src'), { recursive: true })
+    writeFileSync(path.join(dir, 'src', 'a.js'), '// лимит 10\n', 'utf8')
+    writeFileSync(path.join(dir, 'src', 'b.js'), '// лимит 10\n', 'utf8')
+    const task = { ...TASK, id: 'E-07' }
+    const comments = {
+      ...ok,
+      citations: [
+        { path: 'src/a.js', line: 1, ok: true },
+        { path: 'src/b.js', line: 1, ok: true },
+      ],
+      root: dir,
+    }
+    expect(autoVerdict(task, comments).reason).toMatch(/комментариями/)
+    writeFileSync(path.join(dir, 'src', 'a.js'), "if (n > 10) return 'лимит'\n", 'utf8')
+    writeFileSync(path.join(dir, 'src', 'b.js'), "if (n > 10) return 'лимит'\n", 'utf8')
+    expect(autoVerdict(task, comments).pass).toBe(true)
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('E-09 требует назвать поля из схемы, а не только таблицы', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'agent-schema-'))
+    mkdirSync(path.join(dir, 'server', 'prisma'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'server', 'prisma', 'schema.prisma'),
+      'model tickets {\n  id Int\n  title String\n  status String\n}\n',
+      'utf8',
+    )
+    const task = { ...TASK, id: 'E-09', anchors: ['server/prisma/schema.prisma'] }
+    const citation = { path: 'server/prisma/schema.prisma', ok: true }
+    const tables = { ...ok, answer: 'Таблицы: `tickets`. '.repeat(10), citations: [citation], root: dir }
+    expect(autoVerdict(task, tables).reason).toMatch(/не названы поля/)
+    const fields = { ...ok, answer: '`tickets`: `title`, `status`. '.repeat(10), citations: [citation], root: dir }
+    expect(autoVerdict(task, fields).pass).toBe(true)
+    const cited = {
+      ...ok,
+      answer: 'Факты: `server/prisma/schema.prisma:2: title String`, `server/prisma/schema.prisma:3: status String`. '.repeat(10),
+      citations: [citation],
+      root: dir,
+    }
+    expect(autoVerdict(task, cited).pass).toBe(true)
+    const plain = {
+      ...ok,
+      answer: '- id (file:line server/prisma/schema.prisma:2)\n- title (file:line server/prisma/schema.prisma:3)\n'.repeat(5),
+      citations: [citation],
+      root: dir,
+    }
+    expect(autoVerdict(task, plain).pass).toBe(true)
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('E-08 требует два зависимых места вне удаляемого файла', () => {
+    const task = { ...TASK, id: 'E-08', prompt: 'Что сломается при удалении `server/src/index.js`?' }
+    const self = { answer: 'Нет зависимостей. '.repeat(10), citations: [{ path: 'server/src/index.js', ok: true }], fabricated: 0, badLines: 0 }
+    expect(autoVerdict(task, self).reason).toMatch(/мало зависимых мест/)
+    const deps = {
+      answer: 'Сломается запуск: server/package.json:10 и server/src/app.js:1. '.repeat(3),
+      citations: [{ path: 'server/package.json', ok: true }, { path: 'server/src/app.js', ok: true }],
+      fabricated: 0,
+      badLines: 0,
+    }
+    expect(autoVerdict(task, deps).pass).toBe(true)
+  })
+
+  it('отчёт тестов и документация — не доказательство', () => {
+    const okAnswer = { ...ok }
+    expect(
+      autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'server/vitest-server.json', ok: true }] }).reason,
+    ).toMatch(/документации\/отчёта/)
+    expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'PLAYBOOK.md', ok: true }] }).reason).toMatch(/документации/)
+    expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'backups/db.sql', ok: true }] }).reason).toMatch(/документации/)
+    expect(autoVerdict(TASK, { ...okAnswer, citations: [{ path: 'src/app.ts', ok: true }] }).pass).toBe(true)
+  })
+
+  it('журнал в корне проекта — не доказательство', () => {
+    const cited = { ...ok, citations: [{ path: 'Что сделано.txt', ok: true }] }
+    expect(autoVerdict(TASK, cited).reason).toMatch(/документации\/отчёта/)
+    const real = { ...ok, citations: [{ path: 'src/app.ts', ok: true }] }
+    expect(autoVerdict(TASK, real).pass).toBe(true)
+  })
+
+  it('ответ «не найдено» с цитатами — противоречие', () => {
+    const answer = 'Точка входа приложения не найдена. ' + 'Факт: server/src/index.js:56. '.repeat(6)
+    expect(autoVerdict(TASK, { ...ok, answer }).reason).toMatch(/противоречие/)
+  })
+
+  it('обрыв на вызове инструмента — не финальный ответ', () => {
+    const answer = '```json\n{"name":"read_file","arguments":{"path":"server/src/index.js"}}\n```'
+    expect(autoVerdict(TASK, { ...ok, answer }).reason).toMatch(/вызов инструмента/)
+  })
+
+  it('якорный факт обязателен для зачёта', () => {
+    const task = { ...TASK, anchors: ['server/src/index.js'] }
+    const wrong = { ...ok, citations: [{ path: 'check-console.mjs', ok: true }] }
+    expect(autoVerdict(task, wrong).reason).toMatch(/ключевого факта/)
+    const right = { ...ok, citations: [{ path: 'server/src/index.js', ok: true }] }
+    expect(autoVerdict(task, right).pass).toBe(true)
+    const resolved = { ...ok, citations: [{ path: 'index.js', ok: true, resolved: 'server/src/index.js' }] }
+    expect(autoVerdict(task, resolved).pass).toBe(true)
+  })
+})
+
+describe('инструменты', () => {
+  let dir
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+    dir = null
+  })
+
+  const make = () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-tools-'))
+    writeFileSync(path.join(dir, 'a.ts'), 'const x = 1\nconst y = 2\n', 'utf8')
+    return dir
+  }
+
+  it('read_file печатает номера строк и диапазон', () => {
+    const root = make()
+    const text = readFileTool(root, { path: 'a.ts', start: 2, end: 2 })
+    expect(text).toContain('2: const y = 2')
+    expect(text).not.toContain('const x')
+  })
+
+  it('read_file падает на отсутствующем файле', () => {
+    const root = make()
+    expect(() => readFileTool(root, { path: 'nope.ts' })).toThrow(/нет файла/)
+  })
+
+  it('read_file печатает путь относительно корня, даже если дали абсолютный', () => {
+    const root = make()
+    const absolute = path.join(root, 'a.ts')
+    const text = readFileTool(root, { path: absolute, start: 1, end: 1 })
+    expect(text.startsWith('a.ts (строки 1-1')).toBe(true)
+  })
+
+  it('search_files находит строку с file:line', () => {
+    const root = make()
+    expect(searchTool(root, { pattern: 'const y' })).toContain('a.ts:2')
+  })
+
+  it('search_files понимает glob с звёздочкой и точкой', () => {
+    const root = make()
+    writeFileSync(path.join(root, 'b.sql'), 'CREATE TABLE ticket (id int)\n', 'utf8')
+    expect(searchTool(root, { pattern: 'CREATE TABLE', glob: '*.sql' })).toContain('b.sql:1')
+    expect(searchTool(root, { pattern: 'CREATE TABLE', glob: '.sql' })).toContain('b.sql:1')
+    expect(searchTool(root, { pattern: 'CREATE TABLE', glob: 'ts' })).toContain('Ничего не найдено')
+  })
+
+  it('search_files возвращает понятное «ничего»', () => {
+    const root = make()
+    expect(searchTool(root, { pattern: 'zzz' })).toContain('Ничего не найдено')
+  })
+
+  it('search_files не ищет в документации и журналах, read_file их открывает', () => {
+    const root = make()
+    writeFileSync(path.join(root, 'PLAYBOOK.md'), 'const y = 2\n', 'utf8')
+    writeFileSync(path.join(root, 'Что сделано.txt'), 'const y = 2\n', 'utf8')
+    writeFileSync(path.join(root, 'vitest-server.json'), 'const y = 2\n', 'utf8')
+    mkdirSync(path.join(root, 'test-analysis'), { recursive: true })
+    writeFileSync(path.join(root, 'test-analysis', 'dump.json'), 'const y = 2\n', 'utf8')
+    const found = searchTool(root, { pattern: 'const y' })
+    expect(found).toContain('a.ts:2')
+    expect(found).not.toContain('PLAYBOOK.md')
+    expect(found).not.toContain('.txt')
+    expect(found).not.toContain('vitest-server.json')
+    expect(found).not.toContain('test-analysis')
+    expect(readFileTool(root, { path: 'PLAYBOOK.md', start: 1, end: 1 })).toContain('const y = 2')
+  })
+
+  it('search_files пропускает lock-файлы: их пути не код проекта', () => {
+    const root = make()
+    writeFileSync(path.join(root, 'package-lock.json'), '"msw": "cli/index.js"\n', 'utf8')
+    expect(searchTool(root, { pattern: 'cli/index.js' })).toContain('Ничего не найдено')
+  })
+
+  it('read_file отказывает на отчётах, дампах и журналах', () => {
+    const root = make()
+    mkdirSync(path.join(root, 'backups'), { recursive: true })
+    writeFileSync(path.join(root, 'backups', 'db.sql'), 'CREATE TABLE t (id int);\n', 'utf8')
+    expect(() => readFileTool(root, { path: 'backups/db.sql' })).toThrow(/не источник/)
+    expect(() => readFileTool(root, { path: 'Что сделано.txt' })).toThrow(/не источник/)
+  })
+
+  it('поиск по пути существующего файла превращается в поиск по имени', () => {
+    const root = make()
+    mkdirSync(path.join(root, 'server', 'src'), { recursive: true })
+    writeFileSync(path.join(root, 'server', 'src', 'index.js'), 'server.listen(3000)\n', 'utf8')
+    writeFileSync(path.join(root, 'server', 'package.json'), '{"start":"node src/index.js"}\n', 'utf8')
+    const found = searchTool(root, { pattern: 'server/src/index.js' })
+    expect(found).toContain('путь, а не текст')
+    expect(found).toContain('server/package.json:1')
+  })
+
+  it('повтор шаблона и две пустые выдачи дают подсказку', () => {
+    const root = make()
+    const state = { patterns: [], empty: 0 }
+    expect(searchTool(root, { pattern: 'const y' }, state)).not.toContain('Повтор')
+    expect(searchTool(root, { pattern: 'const y' }, state)).toContain('Повтор шаблона')
+    const empty = { patterns: [], empty: 0 }
+    expect(searchTool(root, { pattern: 'zzz' }, empty)).not.toContain('Две пустые')
+    expect(searchTool(root, { pattern: 'zzz' }, empty)).toContain('Две пустые')
+    expect(searchTool(root, { pattern: 'const x' }, empty)).not.toContain('Две пустые')
+  })
+})
+
+describe('текстовый вызов инструмента', () => {
+  it('понимает JSON в ответе и в код-блоке', () => {
+    expect(parseTextCall('{"name":"read_file","arguments":{"path":"a.ts"}}')).toEqual({
+      name: 'read_file',
+      args: { path: 'a.ts' },
+    })
+    expect(parseTextCall('```json\n{"name":"search_files","arguments":{"pattern":"x"}}\n```')).toEqual({
+      name: 'search_files',
+      args: { pattern: 'x' },
+    })
+  })
+
+  it('не принимает неизвестный инструмент и обычный текст', () => {
+    expect(parseTextCall('{"name":"delete_all","arguments":{}}')).toBe(null)
+    expect(parseTextCall('Вывод: файл a.ts:1')).toBe(null)
+    expect(parseTextCall('{битый json')).toBe(null)
+  })
+
+  it('достаёт несколько вызовов из одного ответа', () => {
+    const content = [
+      '```json',
+      '{"name":"read_file","arguments":{"path":"a.ts","start":304,"end":306}}',
+      '```',
+      'и ещё',
+      '{"name":"search_files","arguments":{"pattern":"validate"}}',
+    ].join('\n')
+    expect(parseTextCalls(content)).toEqual([
+      { name: 'read_file', args: { path: 'a.ts', start: 304, end: 306 } },
+      { name: 'search_files', args: { pattern: 'validate' } },
+    ])
+  })
+})
+
+describe('сообщения и отчёт', () => {
+  it('в промпт попадают задача, критерий и корень', () => {
+    const messages = initialMessages(TASK, 'E:/repo')
+    expect(messages[0].role).toBe('system')
+    expect(messages[0].content).toContain('E:/repo')
+    expect(messages[0].content).toContain('coverage/')
+    expect(messages[1].content).toContain('E-01')
+    expect(messages[1].content).toContain('Критерий pass')
+  })
+
+  it('системный промпт укладывается в бюджет 14B и держит запреты отдельным блоком', () => {
+    const system = initialMessages(TASK, 'E:/repo')[0].content
+    expect(system.length).toBeLessThanOrEqual(1000)
+    expect(system).toContain('ЗАПРЕТЫ')
+    expect(system).toContain('ЦИКЛ')
+    expect(system).toContain('ПОИСК')
+    expect(system).toContain('Prisma')
+    expect(system).toContain('2 найденных')
+  })
+
+  it('summarize считает шаги и цитаты', () => {
+    const row = summarize(
+      TASK,
+      { answer: 'Факт: src/a.ts:1. '.repeat(10), toolCalls: 3, trace: [] },
+      { checked: [{ ok: true }], fabricated: 0, badLines: 0 },
+    )
+    expect(row).toMatchObject({ id: 'E-01', pass: true, steps: 4, citations: 1, fabricated: 0 })
+  })
+
+  it('formatSummary печатает итог и среднее шагов', () => {
+    const text = formatSummary([
+      { id: 'E-01', title: 'a', pass: true, steps: 2, citations: 1, fabricated: 0, reason: 'ok' },
+      { id: 'E-02', title: 'b', pass: false, steps: 4, citations: 0, fabricated: 1, reason: 'bad' },
+    ])
+    expect(text).toContain('PASS')
+    expect(text).toContain('FAIL')
+    expect(text).toContain('1/2 pass')
+    expect(text).toContain('среднее шагов 3')
+  })
+
+  it('read-only набор не содержит задач с правкой и git diff', () => {
+    expect(READ_ONLY_TASKS).not.toContain('E-04')
+    expect(READ_ONLY_TASKS).not.toContain('E-05')
+    expect(READ_ONLY_TASKS).not.toContain('E-06')
+    expect(READ_ONLY_TASKS).toContain('E-10')
+    expect(AUTO_SKIP['E-06']).toContain('git diff')
+  })
+})
+
+describe('пересчёт вердиктов', () => {
+  let dir
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+    dir = null
+  })
+
+  it('пересчитывает pass по сохранённым ответам, не вызывая модель', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-rescore-'))
+    writeFileSync(path.join(dir, 'server-index.js'), 'a\nb\nc\n', 'utf8')
+    const tasks = [{ ...TASK, anchors: ['server-index.js'] }]
+    const payload = {
+      rows: [
+        {
+          id: 'E-01', title: TASK.title, pass: true, reason: 'старый вердикт',
+          steps: 3, citations: 1, fabricated: 0, badLines: 0,
+          answer: 'Факт: server-index.js:1 и ещё server-index.js:2. '.repeat(4),
+          trace: [],
+        },
+        {
+          id: 'E-01', title: TASK.title, pass: true, reason: 'старый вердикт',
+          steps: 1, citations: 1, fabricated: 0, badLines: 0,
+          answer: 'Факт: nope-missing.js:1. '.repeat(8),
+          trace: [],
+        },
+      ],
+    }
+    const rows = rescoreRows(payload, dir, tasks)
+    expect(rows[0].pass).toBe(true)
+    expect(rows[1].pass).toBe(false)
+    expect(rows[1].fabricated).toBeGreaterThan(0)
+  })
+})
+
+describe('аргументы', () => {
+  it('понимает root, tasks и флаги', () => {
+    const args = parseArgs(['--root', '.', '--tasks', 'E-01,E-02', '--dry-run'])
+    expect(args.values.root).toBe('.')
+    expect(args.values.tasks).toBe('E-01,E-02')
+    expect(args.flags.has('dry-run')).toBe(true)
+  })
+
+  it('падает на неизвестном аргументе и без значения', () => {
+    expect(() => parseArgs(['лишнее'])).toThrow(/неизвестный/)
+    expect(() => parseArgs(['--root'])).toThrow(/--root/)
+  })
+})
+
+describe('обрыв ответа по num_predict', () => {
+  const stub = (replies) => createServer((req, res) => {
+    req.on('data', () => {})
+    req.on('end', () => {
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify(replies.shift() || { message: { content: '' }, done_reason: 'stop' }))
+    })
+  })
+
+  const listen = async (server) => {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    return `http://127.0.0.1:${server.address().port}`
+  }
+
+  it('просит продолжить и склеивает части без пометки', async () => {
+    const server = stub([
+      { message: { role: 'assistant', content: 'Часть один.' }, done_reason: 'length' },
+      { message: { role: 'assistant', content: 'Часть два.' }, done_reason: 'stop' },
+    ])
+    try {
+      const host = await listen(server)
+      const result = await runTask(TASK, { root: '.', host, model: 'm', maxCalls: 1, timeoutMs: 5000 })
+      expect(result.answer).toContain('Часть один.')
+      expect(result.answer).toContain('Часть два.')
+      expect(result.answer).not.toContain('[ответ обрезан')
+    } finally {
+      server.close()
+    }
+  })
+
+  it('ставит пометку, если лимит не отпустил после двух продолжений', async () => {
+    const server = stub([
+      { message: { content: 'А' }, done_reason: 'length' },
+      { message: { content: 'Б' }, done_reason: 'length' },
+      { message: { content: 'В' }, done_reason: 'length' },
+    ])
+    try {
+      const host = await listen(server)
+      const result = await runTask(TASK, { root: '.', host, model: 'm', maxCalls: 1, timeoutMs: 5000 })
+      expect(result.answer).toContain('[ответ обрезан')
+    } finally {
+      server.close()
+    }
+  })
+})
+
+================================================================================
+ФАЙЛ: scripts/backlog.test.mjs  (10011 байт, 272 строк)
+================================================================================
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  auditBacklog,
+  auditChronicle,
+  closeItem,
+  openItem,
+  parseArgs,
+  today,
+} from './backlog.mjs'
+
+const SCRIPT = path.join(import.meta.dirname, 'backlog.mjs')
+
+const BACKLOG = [
+  '# Что доделать — тест',
+  '',
+  '---',
+  '',
+  '## ✅ Старое',
+  '',
+  '## 🟡 Открытые (P1)',
+  '',
+  '### BLK-01 — Установить модели',
+  'Факт: `02-Установить-локально.bat`',
+  'Статус: ⏳ (проверено 30.10.2026)',
+  '',
+  '### BLK-02 — Проверить ID',
+  'Факт: `scripts/next-task.mjs:16`',
+  'Статус: ⏳ (проверено 30.10.2026)',
+  '',
+  '## Правила работы с журналами',
+  '',
+  '- закрытое уходит в журнал.',
+  '',
+].join('\n')
+
+describe('аудит бэклога', () => {
+  it('принимает открытые пункты с датой проверки', () => {
+    const audit = auditBacklog(BACKLOG)
+    expect(audit.problems).toEqual([])
+    expect(audit.openIds).toEqual(['BLK-01', 'BLK-02'])
+  })
+
+  it('требует строку статуса и дату', () => {
+    const noStatus = BACKLOG.replace('Статус: ⏳ (проверено 30.10.2026)\n', '')
+    expect(auditBacklog(noStatus).problems.join('\n')).toMatch(/нет строки «Статус/)
+
+    const noDate = BACKLOG.replace('(проверено 30.10.2026)', '(проверено —)')
+    expect(auditBacklog(noDate).problems.join('\n')).toMatch(/нет даты/)
+
+    const closedStatus = BACKLOG.replace('Статус: ⏳', 'Статус: ✅')
+    expect(auditBacklog(closedStatus).problems.join('\n')).toMatch(/должен начинаться с ⏳/)
+  })
+
+  it('ловит дубль ID и дубль заголовка по базе', () => {
+    const dup = BACKLOG.replace('### BLK-02 — Проверить ID', '### BLK-01 — Проверить ID')
+    expect(auditBacklog(dup).problems.join('\n')).toMatch(/ID «BLK-01» уже встречался/)
+
+    const dupHeading = BACKLOG.replace('### BLK-02 — Проверить ID', '### BLK-02 — Установить модели (ещё)')
+    expect(auditBacklog(dupHeading).problems.join('\n')).toMatch(/дублируется/)
+  })
+
+  it('запрещает тело под закрытой записью', () => {
+    const text = BACKLOG.replace(
+      '## ✅ Старое',
+      '## ✅ BLK-03 — Старое (см. «Что сделано.txt»: разд. 1) — ЗАКРЫТО 29.10.2026\n\nподробности под строкой',
+    )
+    const problems = auditBacklog(text).problems.join('\n')
+    expect(problems).toMatch(/надгробие/)
+    expect(auditBacklog(text).closedDates).toEqual(['29.10.2026'])
+  })
+
+  it('сверяет даты закрытия с журналом', () => {
+    const audit = auditBacklog(
+      BACKLOG.replace('## ✅ Старое', '## ✅ BLK-03 — Старое — ЗАКРЫТО 29.10.2026'),
+    )
+    expect(auditChronicle(audit.closedDates, 'журнал за 29.10.2026')).toEqual([])
+    expect(auditChronicle(audit.closedDates, 'журнал без даты').join('\n')).toMatch(
+      /закрытие без развёрнутой записи/,
+    )
+  })
+})
+
+describe('закрытие и открытие', () => {
+  it('закрывает пункт одной строкой и убирает тело', () => {
+    const next = closeItem(BACKLOG, {
+      id: 'BLK-01',
+      date: '30.10.2026',
+      ref: 'раздел «BLK-01»',
+    })
+    expect(next).not.toContain('### BLK-01')
+    expect(next).not.toContain('02-Установить-локально.bat')
+    expect(next).toContain(
+      '## ✅ BLK-01 — Установить модели (см. «Что сделано.txt»: раздел «BLK-01») — ЗАКРЫТО 30.10.2026',
+    )
+    expect(auditBacklog(next).problems).toEqual([])
+  })
+
+  it('не закрывает без записи в журнале и без пункта', () => {
+    expect(() =>
+      closeItem(BACKLOG, { id: 'BLK-01', date: '30.10.2026' }, { doneText: 'без даты' }),
+    ).toThrow(/сначала развёрнутая запись/)
+    expect(() => closeItem(BACKLOG, { id: 'NOPE-01', date: '30.10.2026' })).toThrow(
+      /не найден/,
+    )
+    expect(() => closeItem(BACKLOG, { id: 'bad', date: '30.10.2026' })).toThrow(/PREFIX-NN/)
+    expect(() => closeItem(BACKLOG, { id: 'BLK-01', date: '2026-10-30' })).toThrow(/ДД\.ММ\.ГГГГ/)
+  })
+
+  it('добавляет открытый пункт перед правилами, а не после', () => {
+    const next = openItem(BACKLOG, {
+      id: 'DOC-01',
+      title: 'Новый пункт',
+      body: 'Факт: `README.md:1`',
+      date: '30.10.2026',
+    })
+    const rules = next.indexOf('## Правила работы')
+    expect(next.indexOf('### DOC-01')).toBeLessThan(rules)
+    expect(next).toContain('Статус: ⏳ (проверено 30.10.2026)')
+    expect(auditBacklog(next).openIds).toContain('DOC-01')
+  })
+
+  it('не открывает пункт с занятым ID или без заголовка', () => {
+    expect(() => openItem(BACKLOG, { id: 'BLK-01', title: 'Дубль' })).toThrow(/уже занят/)
+    expect(() => openItem(BACKLOG, { id: 'DOC-01', title: '  ' })).toThrow(/title/)
+    expect(() => openItem(BACKLOG, { id: 'X', title: 'x' })).toThrow(/PREFIX-NN/)
+  })
+
+  it('сохраняет CRLF, если файл был в CRLF', () => {
+    const crlf = BACKLOG.replace(/\n/g, '\r\n')
+    const next = openItem(crlf, { id: 'DOC-02', title: 'CRLF', date: '30.10.2026' })
+    expect(next).toContain('\r\n')
+    expect(next.replace(/\r\n/g, '')).not.toContain('\n')
+  })
+})
+
+describe('аргументы', () => {
+  it('разбирает режим, флаги и значения', () => {
+    const args = parseArgs(['close', '--id', 'BLK-01', '--date', '30.10.2026', '--dry-run'])
+    expect(args.mode).toBe('close')
+    expect(args.values.id).toBe('BLK-01')
+    expect(args.flags.has('dry-run')).toBe(true)
+  })
+
+  it('падает на плохом аргументе', () => {
+    expect(() => parseArgs(['check', 'лишнее'])).toThrow(/неизвестный/)
+    expect(() => parseArgs(['close', '--id'])).toThrow(/--id/)
+  })
+})
+
+describe('CLI', () => {
+  let dir
+  let backlogFile
+  let doneFile
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'backlog-'))
+    backlogFile = path.join(dir, 'Что доделать.txt')
+    doneFile = path.join(dir, 'Что сделано.txt')
+    writeFileSync(backlogFile, BACKLOG, 'utf8')
+    writeFileSync(doneFile, '30.10.2026. Запись журнала', 'utf8')
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const run = (args) =>
+    spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8', timeout: 30000 })
+
+  it('check отдаёт 0 на корректном бэклоге', () => {
+    const result = run(['check', '--file', backlogFile, '--done', doneFile])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('канон бэклога соблюдён')
+  })
+
+  it('check отдаёт 1 при нарушении', () => {
+    writeFileSync(backlogFile, BACKLOG.replace('Статус: ⏳ (проверено 30.10.2026)', ''), 'utf8')
+    const result = run(['check', '--file', backlogFile, '--done', doneFile])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/нет строки «Статус/)
+  })
+
+  it('close закрывает и пишет файл', () => {
+    const result = run([
+      'close',
+      '--id',
+      'BLK-01',
+      '--ref',
+      'разд. 1',
+      '--date',
+      '30.10.2026',
+      '--file',
+      backlogFile,
+      '--done',
+      doneFile,
+    ])
+    expect(result.status).toBe(0)
+    const text = readFileSync(backlogFile, 'utf8')
+    expect(text).toContain('ЗАКРЫТО 30.10.2026')
+    expect(text).not.toContain('### BLK-01')
+  })
+
+  it('close отдаёт 1, если даты нет в журнале', () => {
+    writeFileSync(doneFile, 'без даты', 'utf8')
+    const result = run([
+      'close',
+      '--id',
+      'BLK-01',
+      '--date',
+      '30.10.2026',
+      '--file',
+      backlogFile,
+      '--done',
+      doneFile,
+    ])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/сначала развёрнутая запись/)
+  })
+
+  it('open добавляет пункт, --dry-run не меняет файл', () => {
+    const before = readFileSync(backlogFile, 'utf8')
+    const result = run([
+      'open',
+      '--id',
+      'DOC-01',
+      '--title',
+      'Новый',
+      '--date',
+      '30.10.2026',
+      '--file',
+      backlogFile,
+      '--done',
+      doneFile,
+    ])
+    expect(result.status).toBe(0)
+    expect(readFileSync(backlogFile, 'utf8')).toContain('### DOC-01 — Новый')
+
+    const dry = run([
+      'open',
+      '--id',
+      'DOC-02',
+      '--title',
+      'Сухой',
+      '--dry-run',
+      '--file',
+      backlogFile,
+      '--done',
+      doneFile,
+    ])
+    expect(dry.status).toBe(0)
+    expect(readFileSync(backlogFile, 'utf8')).not.toContain('DOC-02')
+    expect(readFileSync(backlogFile, 'utf8')).toContain('DOC-01')
+    expect(before).not.toContain('DOC-01')
+  })
+
+  it('--help отдаёт 0, неизвестная команда — 2', () => {
+    expect(run(['--help']).status).toBe(0)
+    expect(run(['nope']).status).toBe(2)
+  })
+})
+
+describe('дата', () => {
+  it('печатает ДД.ММ.ГГГГ', () => {
+    expect(today(new Date(2026, 9, 30))).toBe('30.10.2026')
+    expect(today(new Date(2026, 0, 5))).toBe('05.01.2026')
+  })
+})
+
+================================================================================
+ФАЙЛ: scripts/ai-profile.test.mjs  (11579 байт, 299 строк)
+================================================================================
+
+import { describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  KIT_ROOT,
+  PROFILES,
+  baseOpencodeConfig,
+  clineDbCandidates,
+  clinePatch,
+  looksLikeProject,
+  matchProfile,
+  mergeOpencodeConfig,
+  modelAvailability,
+  parseArgs,
+  pickTag,
+  resolveOpencodeModel,
+} from './ai-profile.mjs'
+
+describe('профили', () => {
+  it('содержит все документированные профили', () => {
+    expect(Object.keys(PROFILES)).toEqual([
+      'local',
+      'local7',
+      'local-q5',
+      'local14-hq',
+      'cloud',
+      'cloud-ollama',
+    ])
+  })
+
+  it('держит контекст из Modelfile', () => {
+    expect(PROFILES.local.cline.ctx).toBe(12288)
+    expect(PROFILES.local7.cline.ctx).toBe(16384)
+    expect(PROFILES['local-q5'].cline.ctx).toBe(16384)
+    expect(PROFILES['local14-hq'].cline.ctx).toBe(16384)
+    expect(PROFILES.cloud.cline.ctx).toBe(32768)
+  })
+
+  it('локальные профили указывают сборки комплекта', () => {
+    expect(PROFILES.local.cline.model).toBe('swiftmatch-coder-14b')
+    expect(PROFILES['local-q5'].cline.model).toBe('swiftmatch-coder-7b-q5')
+    expect(PROFILES['local-q5'].opencode.ollamaModel).toBe('swiftmatch-coder-7b-q5')
+  })
+
+  it('облачный профиль ведёт OpenCode в бесплатную модель', () => {
+    expect(PROFILES.cloud.opencode.model).toBe('opencode/deepseek-v4.1-flash-free')
+    expect(PROFILES['cloud-ollama'].opencode.model).toBe('ollama/gpt-oss:120b-cloud')
+  })
+})
+
+describe('аргументы', () => {
+  it('по умолчанию берёт текущий каталог', () => {
+    const args = parseArgs([], {}, 'D:\\work\\project')
+    expect(args.root).toBe(path.resolve('D:\\work\\project'))
+    expect(args.rootGiven).toBe(false)
+  })
+
+  it('понимает --root и --root=', () => {
+    expect(parseArgs(['--root', 'D:\\a b'], {}, 'C:\\x').root).toBe(path.resolve('D:\\a b'))
+    expect(parseArgs(['--root=D:\\c'], {}, 'C:\\x').root).toBe(path.resolve('D:\\c'))
+    expect(parseArgs(['--root', 'D:\\p'], {}, 'C:\\x').rootGiven).toBe(true)
+  })
+
+  it('разделяет флаги и позиционные аргументы', () => {
+    const args = parseArgs(['cloud', '--dry-run', '--opencode-only'], {}, 'C:\\x')
+    expect(args.positional).toEqual(['cloud'])
+    expect(args.flags.has('--dry-run')).toBe(true)
+    expect(args.flags.has('--opencode-only')).toBe(true)
+  })
+
+  it('берёт корень из AI_PROJECT_ROOT', () => {
+    const args = parseArgs(['status'], { AI_PROJECT_ROOT: 'D:\\env-project' }, 'C:\\x')
+    expect(args.root).toBe(path.resolve('D:\\env-project'))
+    expect(args.rootGiven).toBe(true)
+  })
+
+  it('падает без значения у --root', () => {
+    expect(() => parseArgs(['--root'], {}, 'C:\\x')).toThrow(/--root/)
+  })
+})
+
+describe('точный ID модели', () => {
+  it('подставляет :latest для сборок без тега', () => {
+    expect(pickTag('swiftmatch-coder-14b', ['swiftmatch-coder-14b:latest'])).toBe(
+      'swiftmatch-coder-14b:latest',
+    )
+    expect(pickTag('swiftmatch-coder-7b-q5', null)).toBe('swiftmatch-coder-7b-q5:latest')
+  })
+
+  it('не трогает имя, если тег уже есть', () => {
+    expect(pickTag('gpt-oss:120b-cloud', [])).toBe('gpt-oss:120b-cloud')
+    expect(pickTag('', [])).toBe('')
+  })
+
+  it('собирает ID для OpenCode', () => {
+    expect(resolveOpencodeModel(PROFILES.local, ['swiftmatch-coder-14b:latest'])).toBe(
+      'ollama/swiftmatch-coder-14b:latest',
+    )
+    expect(resolveOpencodeModel(PROFILES.cloud, [])).toBe('opencode/deepseek-v4.1-flash-free')
+  })
+})
+
+describe('opencode.json', () => {
+  it('базовая конфигурация описывает сборки и облачный тег', () => {
+    const base = baseOpencodeConfig()
+    expect(base.providers.ollama.models['swiftmatch-coder-14b:latest'].limit.context).toBe(12288)
+    expect(base.providers.ollama.models['swiftmatch-coder-7b-q5:latest']).toBeDefined()
+    expect(base.providers.ollama.models['gpt-oss:120b-cloud']).toBeDefined()
+    expect(base.agents.local.permissions[0]).toEqual({
+      action: 'webfetch',
+      resource: '*',
+      effect: 'deny',
+    })
+  })
+
+  it('мержит, а не заменяет: instructions и чужие ключи на месте', () => {
+    const existing = {
+      $schema: 'https://opencode.ai/config.json',
+      theme: 'dark',
+      instructions: ['.opencode/persona.md', 'AGENTS.md'],
+      providers: { other: { models: { custom: {} } } },
+      agents: { local: { description: 'своё описание', steps: 5 } },
+    }
+
+    const next = mergeOpencodeConfig(PROFILES.cloud, existing)
+
+    expect(next.instructions).toEqual(['.opencode/persona.md', 'AGENTS.md'])
+    expect(next.theme).toBe('dark')
+    expect(next.providers.other).toEqual({ models: { custom: {} } })
+    expect(next.model).toBe('opencode/deepseek-v4.1-flash-free')
+    expect(next.default_agent).toBe('cloud')
+
+    // правки пользователя сохраняются, недостающее из шаблона добавляется
+    expect(next.agents.local.description).toBe('своё описание')
+    expect(next.agents.local.steps).toBe(5)
+    expect(next.agents.local.permissions).toHaveLength(2)
+    expect(next.agents.cloud.mode).toBe('primary')
+  })
+
+  it('не теряет deprecated agent: V2-блок имеет приоритет, но старый цел', () => {
+    const existing = {
+      agent: { local: { description: 'старый V1-блок' } },
+    }
+    const next = mergeOpencodeConfig(PROFILES.local, existing)
+    expect(next.agent).toEqual({ local: { description: 'старый V1-блок' } })
+    expect(next.agents.local.description).toContain('3060')
+  })
+})
+
+describe('cline', () => {
+  it('пишет провайдера, модель, base URL и контекст', () => {
+    const patch = clinePatch(PROFILES['local-q5'], 'http://localhost:11434')
+    expect(patch.apiProvider).toBe('ollama')
+    expect(patch.ollamaModelId).toBe('swiftmatch-coder-7b-q5')
+    expect(patch.ollamaBaseUrl).toBe('http://localhost:11434')
+    expect(patch.ollamaApiOptionsCtxNum).toBe('16384')
+    expect(patch.planModeOllamaModelId).toBe('swiftmatch-coder-7b-q5')
+    expect(patch.actModeApiModelId).toBe('swiftmatch-coder-7b-q5')
+  })
+
+  it('находит базу stable и Insiders', () => {
+    const paths = clineDbCandidates({ APPDATA: 'C:\\Users\\u\\AppData\\Roaming' })
+    expect(paths).toHaveLength(2)
+    expect(paths[0]).toContain(path.join('Code', 'User', 'globalStorage', 'state.vscdb'))
+    expect(paths[1]).toContain('Code - Insiders')
+    expect(clineDbCandidates({ CLINE_STATE_DB: 'D:\\state.vscdb' })).toEqual(['D:\\state.vscdb'])
+  })
+})
+
+describe('определение профиля и наличия моделей', () => {
+  it('узнаёт профиль по паре model/default_agent', () => {
+    expect(
+      matchProfile({
+        opencodeModel: 'ollama/swiftmatch-coder-14b:latest',
+        clineModel: 'swiftmatch-coder-14b',
+      }),
+    ).toBe('local')
+    expect(
+      matchProfile({
+        opencodeModel: 'ollama/swiftmatch-coder-7b-q5:latest',
+        clineModel: 'swiftmatch-coder-7b-q5',
+      }),
+    ).toBe('local-q5')
+    expect(
+      matchProfile({
+        opencodeModel: 'opencode/deepseek-v4.1-flash-free',
+        clineModel: 'gpt-oss:120b-cloud',
+      }),
+    ).toBe('cloud')
+    expect(
+      matchProfile({
+        opencodeModel: 'ollama/gpt-oss:120b-cloud',
+        clineModel: 'gpt-oss:120b-cloud',
+      }),
+    ).toBe('cloud-ollama')
+  })
+
+  it('не угадывает при неполном совпадении', () => {
+    expect(matchProfile({ opencodeModel: 'ollama/none:latest' })).toBeNull()
+    expect(matchProfile({})).toBeNull()
+  })
+
+  it('показывает, какие сборки уже в Ollama', () => {
+    const rows = modelAvailability(['swiftmatch-coder-14b:latest'])
+    const local = rows.find((r) => r.profile === 'local')
+    const q5 = rows.find((r) => r.profile === 'local-q5')
+    const cloud = rows.find((r) => r.profile === 'cloud-ollama')
+    expect(local.installed).toBe(true)
+    expect(q5.installed).toBe(false)
+    expect(cloud.cloud).toBe(true)
+    expect(cloud.installed).toBeNull()
+  })
+})
+
+describe('корень проекта', () => {
+  it('отличает проект от служебного каталога', () => {
+    expect(looksLikeProject(KIT_ROOT)).toBe(true) // package.json
+    expect(looksLikeProject(path.join(KIT_ROOT, 'scripts'))).toBe(false)
+  })
+})
+
+describe('запись Cline (интеграция, без живого VS Code)', () => {
+  it('пишет профиль в отдельную state.vscdb и делает бэкап', async () => {
+    let sqlite
+    try {
+      sqlite = await import('node:sqlite')
+    } catch {
+      return // Node без node:sqlite: тест неприменим, отдельный тест уже проверяет warn
+    }
+    const Database = sqlite.Database || sqlite.DatabaseSync
+
+    const tmp = mkdtempSync(path.join(tmpdir(), 'ai-profile-cline-'))
+    const project = path.join(tmp, 'project')
+    mkdirSync(project)
+    writeFileSync(
+      path.join(project, 'opencode.json'),
+      JSON.stringify({ $schema: 'https://opencode.ai/config.json' }),
+      'utf8',
+    )
+
+    const dbFile = path.join(tmp, 'state.vscdb')
+    const db = new Database(dbFile)
+    db.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)')
+    const before = {
+      apiProvider: 'openrouter',
+      apiModelId: 'old/model',
+      autoApprovalEnabled: true,
+    }
+    db.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)').run(
+      'saoudrizwan.claude-dev',
+      Buffer.from(JSON.stringify(before), 'utf8'),
+    )
+    db.close()
+
+    const script = path.join(KIT_ROOT, 'scripts', 'ai-profile.mjs')
+    const result = spawnSync(
+      process.execPath,
+      ['--no-warnings', script, 'local-q5', '--root', project, '--cline-only', '--force'],
+      { encoding: 'utf8', env: { ...process.env, CLINE_STATE_DB: dbFile }, timeout: 30000 },
+    )
+
+    try {
+      expect(result.status, result.stderr || result.stdout).toBe(0)
+
+      const check = new Database(dbFile)
+      const row = check.prepare('SELECT value FROM ItemTable WHERE key = ?').get(
+        'saoudrizwan.claude-dev',
+      )
+      check.close()
+      const saved = JSON.parse(Buffer.from(row.value).toString('utf8'))
+
+      expect(saved.apiProvider).toBe('ollama')
+      expect(saved.ollamaModelId).toBe('swiftmatch-coder-7b-q5')
+      expect(saved.ollamaApiOptionsCtxNum).toBe('16384')
+      expect(saved.actModeApiModelId).toBe('swiftmatch-coder-7b-q5')
+      // настройки, которых нет в патче, не теряются
+      expect(saved.autoApprovalEnabled).toBe(true)
+
+      const backups = readdirSync(tmp).filter((name) => name.startsWith('state.vscdb.bak-'))
+      expect(backups).toHaveLength(1)
+      // opencode.json не тронут: был --cline-only
+      expect(readFileSync(path.join(project, 'opencode.json'), 'utf8')).toBe(
+        JSON.stringify({ $schema: 'https://opencode.ai/config.json' }),
+      )
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+})
+
+================================================================================
+ФАЙЛ: scripts/project-brief.test.mjs  (9414 байт, 249 строк)
+================================================================================
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  collectBrief,
+  detectEntryPoints,
+  isConfigFile,
+  isDbFile,
+  isNoiseDir,
+  isRouteFile,
+  isTestFile,
+  parseArgs,
+  renderBrief,
+  walkFiles,
+} from './project-brief.mjs'
+
+const SCRIPT = path.join(import.meta.dirname, 'project-brief.mjs')
+
+const write = (root, rel, content) => {
+  const target = path.join(root, rel)
+  mkdirSync(path.dirname(target), { recursive: true })
+  writeFileSync(target, content, 'utf8')
+}
+
+// Мини-проект, в котором у каждого списка брифа есть ровно один очевидный ответ.
+function makeProject() {
+  const root = mkdtempSync(path.join(tmpdir(), 'brief-'))
+  write(
+    root,
+    'package.json',
+    JSON.stringify({
+      name: 'demo',
+      version: '1.0.0',
+      main: 'src/main.js',
+      scripts: { test: 'vitest' },
+      dependencies: { express: '^4' },
+      devDependencies: { vitest: '^1' },
+    }),
+  )
+  write(root, 'src/main.js', '// TODO: подключить роуты\nconst value: any = 1\n// FIXME: убрать\n')
+  write(root, 'src/routes/users.js', 'export const users = []\n')
+  write(root, 'src/routes/users.test.js', "import { users } from './users.js'\n")
+  write(root, 'src/db/schema.prisma', 'model User { id Int @id }\n')
+  write(root, 'db/migrations/001_init.sql', 'create table users (id int);\n')
+  write(root, 'tsconfig.json', '{ "compilerOptions": {} }\n')
+  write(root, 'big.js', `// ${'x'.repeat(3000)}\n`)
+  // Шум: не должен попасть ни в списки, ни в счётчики.
+  write(root, 'node_modules/junk/index.js', '// TODO: из зависимости\n')
+  write(root, 'dist/bundle.js', '// TODO: из сборки\n')
+  write(root, '.git/config', '[core]\n')
+  return root
+}
+
+let root
+
+beforeEach(() => {
+  root = makeProject()
+})
+
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+})
+
+describe('обход дерева', () => {
+  it('пропускает служебные каталоги', () => {
+    const paths = walkFiles(root).map((file) => file.path)
+    expect(paths).toContain('src/main.js')
+    expect(paths.some((p) => p.startsWith('node_modules/'))).toBe(false)
+    expect(paths.some((p) => p.startsWith('dist/'))).toBe(false)
+    expect(paths.some((p) => p.startsWith('.git/'))).toBe(false)
+  })
+
+  it('отдаёт posix-пути и детерминированный порядок', () => {
+    const first = walkFiles(root).map((file) => file.path)
+    const second = walkFiles(root).map((file) => file.path)
+    expect(first).toEqual(second)
+    expect(first).toEqual([...first].sort())
+    expect(first.every((p) => !p.includes('\\'))).toBe(true)
+  })
+
+  it('знает имена шумных каталогов', () => {
+    expect(isNoiseDir('node_modules')).toBe(true)
+    expect(isNoiseDir('NODE_MODULES')).toBe(true)
+    expect(isNoiseDir('.git')).toBe(true)
+    expect(isNoiseDir('src')).toBe(false)
+  })
+})
+
+describe('классификация файлов', () => {
+  it('находит точки входа из package.json и по имени', () => {
+    expect(detectEntryPoints(walkFiles(root).map((file) => ({ path: file.path, size: 0 })), {
+      main: 'src/main.js',
+    })).toEqual(['src/main.js'])
+  })
+
+  it('различает тесты, роуты, БД и конфиги', () => {
+    expect(isTestFile('src/routes/users.test.js')).toBe(true)
+    expect(isTestFile('tests/users.js')).toBe(true)
+    expect(isTestFile('src/users.js')).toBe(false)
+
+    expect(isRouteFile('src/routes/users.js')).toBe(true)
+    expect(isRouteFile('src/pages/api/health.ts')).toBe(true)
+    expect(isRouteFile('src/models/user.js')).toBe(false)
+
+    expect(isDbFile('db/migrations/001_init.sql')).toBe(true)
+    expect(isDbFile('src/db/schema.prisma')).toBe(true)
+    expect(isDbFile('src/models/user.js')).toBe(true)
+    expect(isDbFile('models/Modelfile-7b-q5')).toBe(false)
+    expect(isDbFile('src/main.js')).toBe(false)
+
+    expect(isConfigFile('tsconfig.json')).toBe(true)
+    expect(isConfigFile('vite.config.ts')).toBe(true)
+    expect(isConfigFile('.env.example')).toBe(true)
+    expect(isConfigFile('src/main.js')).toBe(false)
+  })
+})
+
+describe('сбор фактов', () => {
+  it('наполняет списки без шума', () => {
+    const brief = collectBrief(root)
+    expect(brief.package.name).toBe('demo')
+    expect(brief.package.dependencies).toEqual(['express'])
+    expect(brief.entry).toEqual(['src/main.js'])
+    expect(brief.routes).toContain('src/routes/users.js')
+    expect(brief.routes.some((p) => p.startsWith('node_modules/'))).toBe(false)
+    expect(brief.db).toEqual(['db/migrations/001_init.sql', 'src/db/schema.prisma'])
+    expect(brief.tests).toEqual(['src/routes/users.test.js'])
+    expect(brief.testsTotal).toBe(1)
+    expect(brief.configs).toContain('tsconfig.json')
+  })
+
+  it('считает маркеры только в коде и только реальные', () => {
+    const { markers } = collectBrief(root)
+    expect(markers.TODO).toBe(1)
+    expect(markers.FIXME).toBe(1)
+    expect(markers.any).toBe(1)
+    expect(markers.scanned).toBeGreaterThan(0)
+  })
+
+  it('сортирует крупные файлы по размеру', () => {
+    const brief = collectBrief(root)
+    expect(brief.largest[0].path).toBe('big.js')
+    expect(brief.largest[0].bytes).toBeGreaterThan(3000)
+  })
+
+  it('уважает --limit', () => {
+    const brief = collectBrief(root, { limit: 1 })
+    expect(brief.largest).toHaveLength(1)
+    expect(brief.configs).toHaveLength(1)
+  })
+
+  it('переживает каталог без package.json', () => {
+    const bare = mkdtempSync(path.join(tmpdir(), 'brief-bare-'))
+    try {
+      write(bare, 'main.py', 'print(1)\n')
+      const brief = collectBrief(bare)
+      expect(brief.package).toBeNull()
+      expect(brief.filesTotal).toBe(1)
+    } finally {
+      rmSync(bare, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('текстовый отчёт', () => {
+  it('печатает факты и прямо говорит, что доказательством не является', () => {
+    const text = renderBrief(collectBrief(root))
+    expect(text).toContain('PROJECT BRIEF')
+    expect(text).toContain('package: demo 1.0.0')
+    expect(text).toContain('entry: src/main.js')
+    expect(text).toContain('не доказательство')
+    expect(text).toMatch(/каждое утверждение подкрепи file:line/i)
+  })
+})
+
+describe('аргументы', () => {
+  it('по умолчанию берёт текущий каталог', () => {
+    const args = parseArgs([], 'D:\\work\\project')
+    expect(args.root).toBe(path.resolve('D:\\work\\project'))
+    expect(args.limit).toBe(20)
+    expect(args.json).toBe(false)
+  })
+
+  it('понимает --root, --out, --json и --limit', () => {
+    const args = parseArgs(['--root', 'D:\\a b', '--out', 'tmp\\b.txt', '--json', '--limit', '5'])
+    expect(args.root).toBe(path.resolve('D:\\a b'))
+    expect(args.out).toBe('tmp\\b.txt')
+    expect(args.json).toBe(true)
+    expect(args.limit).toBe(5)
+  })
+
+  it('понимает форму --key=value', () => {
+    const args = parseArgs(['--root=D:\\c', '--out=x.txt', '--limit=3'])
+    expect(args.root).toBe(path.resolve('D:\\c'))
+    expect(args.out).toBe('x.txt')
+    expect(args.limit).toBe(3)
+  })
+
+  it('падает без значения у --root и на плохом --limit', () => {
+    expect(() => parseArgs(['--root'])).toThrow(/--root/)
+    expect(() => parseArgs(['--limit', '0'])).toThrow(/--limit/)
+    expect(() => parseArgs(['--limit', 'abc'])).toThrow(/--limit/)
+    expect(() => parseArgs(['--nope'])).toThrow(/неизвестный/)
+  })
+})
+
+describe('CLI', () => {
+  const run = (args) =>
+    spawnSync(process.execPath, [SCRIPT, ...args], {
+      encoding: 'utf8',
+      timeout: 30000,
+    })
+
+  it('печатает JSON по --json', () => {
+    const result = run(['--root', root, '--json'])
+    expect(result.status).toBe(0)
+    const brief = JSON.parse(result.stdout)
+    expect(brief.package.name).toBe('demo')
+    expect(brief.entry).toContain('src/main.js')
+  })
+
+  it('пишет бриф в файл по --out', () => {
+    const target = path.join(root, 'brief.txt')
+    const result = run(['--root', root, '--out', target])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('Бриф записан')
+    const text = readFileSync(target, 'utf8')
+    expect(text).toContain('PROJECT BRIEF')
+  })
+
+  it('отдаёт справку без ошибки', () => {
+    const result = run(['--help'])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('--root')
+  })
+
+  it('возвращает 2 на несуществующий каталог и плохой аргумент', () => {
+    const missing = run(['--root', path.join(root, 'nope')])
+    expect(missing.status).toBe(2)
+    expect(missing.stderr).toMatch(/Нет такого каталога/)
+
+    const bad = run(['--nope'])
+    expect(bad.status).toBe(2)
+    expect(bad.stderr).toMatch(/неизвестный аргумент/)
+  })
+})
+
+================================================================================
+ФАЙЛ: scripts/agent-eval.test.mjs  (9624 байт, 286 строк)
+================================================================================
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  THRESHOLDS,
+  formatPrompt,
+  formatScore,
+  loadResults,
+  loadTasks,
+  parseArgs,
+  recordRun,
+  scoreRuns,
+  validateRun,
+} from './agent-eval.mjs'
+
+const SCRIPT = path.join(import.meta.dirname, 'agent-eval.mjs')
+const TASKS = loadTasks()
+
+const run = (id, pass, steps, fabricated = 0, note = '') => ({
+  id,
+  pass,
+  steps,
+  fabricated,
+  note,
+})
+
+describe('задачи', () => {
+  it('содержит 10 задач с уникальными ID', () => {
+    expect(TASKS).toHaveLength(10)
+    expect(new Set(TASKS.map((task) => task.id)).size).toBe(10)
+    expect(TASKS[0].id).toBe('E-01')
+    expect(TASKS[9].id).toBe('E-10')
+  })
+
+  it('у каждой задачи есть маршрут и критерий', () => {
+    for (const task of TASKS) {
+      expect(['local', 'cloud']).toContain(task.route)
+      expect(task.criterion.length).toBeGreaterThan(20)
+    }
+  })
+
+  it('у каждой задачи есть готовый промпт без заглушек', () => {
+    for (const task of TASKS) {
+      expect(task.prompt.length).toBeGreaterThan(60)
+      expect(task.prompt).not.toMatch(/TODO|\.\.\.|<файл>|<ID>/u)
+    }
+  })
+
+  it('formatPrompt печатает задачу, критерий и правила', () => {
+    const text = formatPrompt(TASKS[0])
+    expect(text).toContain('E-01')
+    expect(text).toContain(TASKS[0].title)
+    expect(text).toContain('Критерий pass:')
+    expect(text).toContain('file:line')
+    expect(text).toContain('Не проверено')
+  })
+})
+
+describe('запись прогона', () => {
+  it('проверяет ID, флаг и числа', () => {
+    expect(() => validateRun(run('E-99', true, 1), TASKS)).toThrow(/неизвестная задача/)
+    expect(() => validateRun({ id: 'E-01', steps: 1 }, TASKS)).toThrow(/--pass \/ --fail/)
+    expect(() => validateRun(run('E-01', true, -1), TASKS)).toThrow(/--steps/)
+    expect(() => validateRun(run('E-01', true, 1, -1), TASKS)).toThrow(/--fabricated/)
+  })
+
+  it('добавляет запись, не меняя исходные данные', () => {
+    const data = { runs: [] }
+    const next = recordRun(data, run('E-01', true, 4, 0, '  ок  '), TASKS)
+    expect(data.runs).toHaveLength(0)
+    expect(next.runs).toHaveLength(1)
+    expect(next.runs[0].note).toBe('ок')
+    expect(next.runs[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+})
+
+describe('счёт', () => {
+  it('берёт последний прогон по каждой задаче', () => {
+    const data = {
+      runs: [
+        run('E-01', false, 9, 2),
+        run('E-01', true, 4, 0),
+        run('E-02', true, 3),
+      ],
+    }
+    const score = scoreRuns(data, TASKS)
+    const e01 = score.rows.find((row) => row.id === 'E-01')
+    expect(e01.pass).toBe(true)
+    expect(e01.attempts).toBe(2)
+    expect(e01.steps).toBe(4)
+    expect(score.attempted).toBe(2)
+    expect(score.passed).toBe(2)
+    expect(score.fabricated).toBe(0)
+  })
+
+  it('считает выдуманное по последнему прогону', () => {
+    const data = { runs: [run('E-01', true, 4), run('E-02', false, 9, 2)] }
+    const score = scoreRuns(data, TASKS)
+    expect(score.passed).toBe(1)
+    expect(score.fabricated).toBe(2)
+    expect(score.avgSteps).toBe(6.5)
+  })
+
+  it('готовность требует pass ≥ 7, 0 выдуманного и среднее ≤ 6', () => {
+    const passing = { runs: TASKS.slice(0, 7).map((task) => run(task.id, true, 4)) }
+    expect(scoreRuns(passing, TASKS).ready).toBe(true)
+
+    const fabricated = { runs: TASKS.map((task) => run(task.id, true, 4, 1)) }
+    expect(scoreRuns(fabricated, TASKS).ready).toBe(false)
+
+    const slow = { runs: TASKS.map((task) => run(task.id, true, 7)) }
+    expect(scoreRuns(slow, TASKS).ready).toBe(false)
+
+    expect(THRESHOLDS.minPass).toBe(7)
+  })
+
+  it('пустой файл результатов не считается готовым', () => {
+    const score = scoreRuns({ runs: [] }, TASKS)
+    expect(score.attempted).toBe(0)
+    expect(score.ready).toBe(false)
+  })
+
+  it('печатает таблицу и порог', () => {
+    const text = formatScore(scoreRuns({ runs: [run('E-01', true, 4)] }, TASKS))
+    expect(text).toContain('E-01')
+    expect(text).toContain('PASS')
+    expect(text).toContain('Порог:')
+    expect(text).toContain('не готов')
+  })
+})
+
+describe('аргументы', () => {
+  it('понимает флаги и значения', () => {
+    const args = parseArgs(['record', '--id', 'E-01', '--pass', '--steps', '4'])
+    expect(args.mode).toBe('record')
+    expect(args.values.id).toBe('E-01')
+    expect(args.flags.has('pass')).toBe(true)
+  })
+
+  it('запрещает pass+fail одновременно', () => {
+    expect(() => parseArgs(['record', '--id', 'E-01', '--pass', '--fail'])).toThrow(
+      /взаимоисключающие/,
+    )
+  })
+
+  it('падает на неизвестном аргументе', () => {
+    expect(() => parseArgs(['list', 'лишнее'])).toThrow(/неизвестный/)
+    expect(() => parseArgs(['record', '--id'])).toThrow(/--id/)
+  })
+})
+
+describe('CLI', () => {
+  let dir
+  let results
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'eval-'))
+    results = path.join(dir, 'results.json')
+    writeFileSync(results, '{"runs":[]}\n', 'utf8')
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const exec = (args) =>
+    spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8', timeout: 30000 })
+
+  it('list печатает задачи', () => {
+    const result = exec(['list'])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('E-01')
+    expect(result.stdout).toContain('E-10')
+  })
+
+  it('prompt печатает готовый промпт, ошибки — 1/2', () => {
+    const ok = exec(['prompt', '--id', 'E-01'])
+    expect(ok.status).toBe(0)
+    expect(ok.stdout).toContain('E-01')
+    expect(ok.stdout).toContain('Критерий pass:')
+
+    expect(exec(['prompt', '--id', 'E-99']).status).toBe(1)
+    expect(exec(['prompt']).status).toBe(2)
+  })
+
+  it('record пишет результат, score его видит', () => {
+    const record = exec([
+      'record',
+      '--id',
+      'E-01',
+      '--pass',
+      '--steps',
+      '4',
+      '--fabricated',
+      '0',
+      '--note',
+      'ок',
+      '--results',
+      results,
+    ])
+    expect(record.status).toBe(0)
+    const data = loadResults(results)
+    expect(data.runs).toHaveLength(1)
+    expect(data.runs[0]).toMatchObject({ id: 'E-01', pass: true, steps: 4, note: 'ок' })
+
+    const score = exec(['score', '--results', results])
+    expect(score.status).toBe(0)
+    expect(score.stdout).toContain('E-01')
+    expect(score.stdout).toContain('1/10 pass')
+  })
+
+  it('record отдаёт 1 на неизвестной задаче и плохом числе', () => {
+    const badId = exec(['record', '--id', 'E-99', '--pass', '--results', results])
+    expect(badId.status).toBe(1)
+    expect(badId.stderr).toMatch(/неизвестная задача/)
+
+    const badSteps = exec([
+      'record',
+      '--id',
+      'E-01',
+      '--pass',
+      '--steps',
+      '-2',
+      '--results',
+      results,
+    ])
+    expect(badSteps.status).toBe(1)
+    expect(badSteps.stderr).toMatch(/--steps/)
+  })
+
+  it('score --strict отдаёт 1, пока порог не достигнут', () => {
+    const result = exec(['score', '--strict', '--results', results])
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('не готов')
+  })
+
+  it('--help отдаёт 0, неизвестная команда — 2', () => {
+    expect(exec(['--help']).status).toBe(0)
+    expect(exec(['nope']).status).toBe(2)
+  })
+})
+
+describe('битые файлы', () => {
+  it('loadResults на отсутствующем файле возвращает пусто', () => {
+    expect(loadResults(path.join(tmpdir(), 'no-such-eval-file.json'))).toEqual({ runs: [] })
+  })
+
+  it('loadTasks падает на дубле ID', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'eval-bad-'))
+    const file = path.join(dir, 'tasks.json')
+    try {
+      writeFileSync(
+        file,
+        JSON.stringify([
+          { id: 'E-01', title: 'a', route: 'local', criterion: 'x'.repeat(30), prompt: 'y'.repeat(80) },
+          { id: 'E-01', title: 'b', route: 'local', criterion: 'x'.repeat(30), prompt: 'y'.repeat(80) },
+        ]),
+        'utf8',
+      )
+      expect(() => loadTasks(file)).toThrow(/дубль ID/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('не перезаписывает файл результатов при ошибке валидации', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'eval-keep-'))
+    const file = path.join(dir, 'results.json')
+    const before = '{"runs":[]}\n'
+    try {
+      writeFileSync(file, before, 'utf8')
+      const result = spawnSync(
+        process.execPath,
+        [SCRIPT, 'record', '--id', 'E-99', '--pass', '--results', file],
+        { encoding: 'utf8', timeout: 30000 },
+      )
+      expect(result.status).toBe(1)
+      expect(readFileSync(file, 'utf8')).toBe(before)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+================================================================================
+ФАЙЛ: scripts/init-project.test.mjs  (8669 байт, 207 строк)
+================================================================================
+
+import { afterEach, describe, expect, it } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  KIT_ROOT,
+  UserError,
+  applyPlan,
+  installProject,
+  parseArgs,
+  runCli,
+} from './init-project.mjs'
+
+const tempDirs = []
+
+function tempProject() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'kit-init-'))
+  tempDirs.push(dir)
+  return dir
+}
+
+const read = (root, name) => readFileSync(path.join(root, name), 'utf8')
+const write = (root, name, text) => writeFileSync(path.join(root, name), text, 'utf8')
+
+afterEach(() => {
+  while (tempDirs.length > 0) rmSync(tempDirs.pop(), { recursive: true, force: true })
+})
+
+describe('init-project: аргументы', () => {
+  it('разбирает --root и флаги', () => {
+    const options = parseArgs(['--root', 'C:\\project', '--dry-run', '--force', '--convert-rules'])
+    expect(options.root).toBe(path.resolve('C:\\project'))
+    expect(options.dryRun).toBe(true)
+    expect(options.force).toBe(true)
+    expect(options.convertRules).toBe(true)
+  })
+
+  it('падает на неизвестном флаге и пустом --root', () => {
+    expect(() => parseArgs(['--nope'])).toThrow(/неизвестный аргумент/u)
+    expect(() => parseArgs(['--root'])).toThrow(/--root требует/u)
+  })
+
+  it('запрещает установку в сам комплект', () => {
+    expect(() => installProject({ root: KIT_ROOT, dryRun: true })).toThrow(UserError)
+  })
+})
+
+describe('init-project: установка', () => {
+  it('создаёт правила, workflows, память и docs', () => {
+    const root = tempProject()
+    const result = installProject({ root })
+
+    expect(result.ok).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules', '00-project.md'))).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules', '40-agent-cycle.md'))).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules', '50-few-shot.md'))).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules', 'workflows', 'deep-planning.md'))).toBe(true)
+    expect(existsSync(path.join(root, 'cline_docs', 'activeContext.md'))).toBe(true)
+    expect(existsSync(path.join(root, 'docs', 'AGENTS-cline-setup.md'))).toBe(true)
+    expect(existsSync(path.join(root, 'docs', 'AGENTS-verify-checklist.md'))).toBe(true)
+    expect(read(root, '.clinerules/40-agent-cycle.md')).toMatch(/RESTATE/u)
+    expect(read(root, 'cline_docs/activeContext.md')).toMatch(/Текущая задача/u)
+  })
+
+  it('повторный запуск ничего не перезаписывает', () => {
+    const root = tempProject()
+    installProject({ root })
+    const first = read(root, '.clinerules/40-agent-cycle.md')
+    const second = installProject({ root })
+
+    expect(second.ok).toBe(true)
+    expect(second.results.filter((row) => row.type === 'copy' && row.applied)).toEqual([])
+    expect(read(root, '.clinerules/40-agent-cycle.md')).toBe(first)
+  })
+
+  it('--dry-run не создаёт файлов', () => {
+    const root = tempProject()
+    const result = installProject({ root, dryRun: true })
+
+    expect(result.ok).toBe(true)
+    expect(result.results.some((row) => row.type === 'copy' && row.dryRun)).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules'))).toBe(false)
+    expect(existsSync(path.join(root, 'cline_docs'))).toBe(false)
+  })
+
+  it('--no-workflows и --no-memory отключают части', () => {
+    const root = tempProject()
+    installProject({ root, noWorkflows: true, noMemory: true })
+
+    expect(existsSync(path.join(root, '.clinerules', '40-agent-cycle.md'))).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules', 'workflows'))).toBe(false)
+    expect(existsSync(path.join(root, 'cline_docs'))).toBe(false)
+  })
+})
+
+describe('init-project: существующие файлы', () => {
+  it('не перезаписывает правила без --force', () => {
+    const root = tempProject()
+    installProject({ root })
+    write(root, '.clinerules/40-agent-cycle.md', 'МОИ ПРАВИЛА\n')
+
+    const result = installProject({ root })
+    expect(result.ok).toBe(true)
+    expect(read(root, '.clinerules/40-agent-cycle.md')).toBe('МОИ ПРАВИЛА\n')
+  })
+
+  it('перезаписывает правила с --force', () => {
+    const root = tempProject()
+    installProject({ root })
+    write(root, '.clinerules/40-agent-cycle.md', 'МОИ ПРАВИЛА\n')
+
+    installProject({ root, force: true })
+    expect(read(root, '.clinerules/40-agent-cycle.md')).toMatch(/RESTATE/u)
+  })
+
+  it('не перезаписывает паспорт проекта даже с --force', () => {
+    const root = tempProject()
+    installProject({ root })
+    write(root, '.clinerules/00-project.md', 'МОЙ ПАСПОРТ\n')
+
+    installProject({ root, force: true })
+    expect(read(root, '.clinerules/00-project.md')).toBe('МОЙ ПАСПОРТ\n')
+  })
+
+  it('сохраняет Memory Bank без --force-memory', () => {
+    const root = tempProject()
+    installProject({ root })
+    write(root, 'cline_docs/activeContext.md', 'МОЯ ПАМЯТЬ\n')
+
+    installProject({ root, force: true })
+    expect(read(root, 'cline_docs/activeContext.md')).toBe('МОЯ ПАМЯТЬ\n')
+  })
+
+  it('перезаписывает Memory Bank с --force-memory', () => {
+    const root = tempProject()
+    installProject({ root })
+    write(root, 'cline_docs/activeContext.md', 'МОЯ ПАМЯТЬ\n')
+
+    installProject({ root, forceMemory: true })
+    expect(read(root, 'cline_docs/activeContext.md')).toMatch(/Текущая задача/u)
+  })
+})
+
+describe('init-project: .clinerules-файл', () => {
+  it('без --convert-rules возвращает конфликт и ничего не ломает', () => {
+    const root = tempProject()
+    write(root, '.clinerules', 'СТАРЫЕ ПРАВИЛА\n')
+
+    const result = installProject({ root })
+    expect(result.ok).toBe(false)
+    expect(result.results.some((row) => row.type === 'conflict')).toBe(true)
+    expect(read(root, '.clinerules')).toBe('СТАРЫЕ ПРАВИЛА\n')
+    expect(existsSync(path.join(root, '.clinerules', '40-agent-cycle.md'))).toBe(false)
+  })
+
+  it('с --convert-rules сохраняет старый файл как 00-project-rules.md', () => {
+    const root = tempProject()
+    write(root, '.clinerules', 'СТАРЫЕ ПРАВИЛА\n')
+
+    const result = installProject({ root, convertRules: true })
+    expect(result.ok).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules', '00-project-rules.md'))).toBe(true)
+    expect(read(root, '.clinerules/00-project-rules.md')).toBe('СТАРЫЕ ПРАВИЛА\n')
+    expect(existsSync(path.join(root, '.clinerules', '40-agent-cycle.md'))).toBe(true)
+    expect(existsSync(path.join(root, '.clinerules'))).toBe(true)
+  })
+
+  it('возвращает старый файл, если конвертация не удалась', () => {
+    const root = tempProject()
+    const source = path.join(root, '.clinerules')
+    const target = path.join(root, 'blocked')
+    writeFileSync(source, 'СТАРЫЕ ПРАВИЛА\n', 'utf8')
+    writeFileSync(target, 'занято\n', 'utf8')
+
+    const results = applyPlan({ root, actions: [{ type: 'convert-rules', source, target }] })
+    expect(results[0].error).toBeTruthy()
+    expect(readFileSync(source, 'utf8')).toBe('СТАРЫЕ ПРАВИЛА\n')
+    expect(existsSync(`${source}.kit-backup`)).toBe(false)
+  })
+})
+
+describe('init-project: CLI', () => {
+  it('печатает справку без записи', () => {
+    const lines = []
+    const code = runCli(['--help'], { log: (line) => lines.push(line), error: (line) => lines.push(line) })
+    expect(code).toBe(0)
+    expect(lines.join('\n')).toMatch(/init-project/u)
+    expect(lines.join('\n')).toMatch(/--dry-run/u)
+  })
+
+  it('возвращает 2 на неизвестный флаг', () => {
+    const errors = []
+    const code = runCli(['--nope'], { log: () => {}, error: (line) => errors.push(line) })
+    expect(code).toBe(2)
+    expect(errors.join('\n')).toMatch(/неизвестный аргумент/u)
+  })
+
+  it('возвращает 1 на конфликт .clinerules-файла', () => {
+    const root = tempProject()
+    write(root, '.clinerules', 'СТАРЫЕ ПРАВИЛА\n')
+    const output = []
+    const code = runCli(['--root', root], { log: (line) => output.push(line), error: (line) => output.push(line) })
+    expect(code).toBe(1)
+    expect(output.join('\n')).toMatch(/CONFLICT/u)
+  })
+})
