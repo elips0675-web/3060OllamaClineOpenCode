@@ -14,6 +14,7 @@
 | `docs/AGENTS-cline-setup.md` | Compact Prompt, лимиты 14B, Confidence Check, Memory Bank |
 | `docs/AGENTS-openclose-experiment.md` | внешний харнесс OpenClose: установка, патч, результаты |
 | `docs/AGENTS-remote-eval.md` | прогон эвалов без 3060: бесплатные GPU-ноутбуки, границы |
+| `docs/AGENTS-kaggle-runbook.md` | Kaggle-ноутбук: Ollama на T4 и тот же автосрез |
 | `scripts/init-project.mjs` | установщик правил, workflows и памяти в любой проект |
 | `templates/agent-protocol.md` | агентный цикл, бюджет шагов, стоп-правила |
 | `templates/few-shot.md` | примеры правильного ответа и вызова инструмента |

@@ -84,6 +84,12 @@ npm.cmd run eval:live -- --root <проект> --tasks E-01,E-02 --out evals/liv
 npm.cmd run eval:live -- --root <проект> --rescore evals/live-2026-10-30.json
 ```
 
+## Прогон без 3060
+
+Запасной стенд — Kaggle T4 ×2: `evals/kaggle-agent-live.ipynb`, инструкция —
+`docs/AGENTS-kaggle-runbook.md`. Числа с него помечаются как снятые не на 3060
+и не перезаписывают канон.
+
 ## Порог «агент готов»
 
 - latest pass ≥ 7 из 10;
