@@ -466,6 +466,8 @@ describe('сообщения и отчёт', () => {
     expect(system).toContain('ЗАПРЕТЫ')
     expect(system).toContain('ЦИКЛ')
     expect(system).toContain('ПОИСК')
+    expect(system).toContain('Prisma')
+    expect(system).toContain('2 найденных')
   })
 
   it('summarize считает шаги и цитаты', () => {
