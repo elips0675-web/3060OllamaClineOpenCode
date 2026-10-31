@@ -44,7 +44,7 @@ const isTestPath = (file) =>
   /(?:^|\/)(?:__tests__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(String(file || ''))
 export const SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', 'coverage', 'playwright-report',
-  'test-results', '.next', '.cache', 'tmp', 'logs',
+  'test-results', 'test-analysis', 'backups', '.next', '.cache', 'tmp', 'logs',
 ])
 
 // Документация и журналы (.md/.txt) в поиск не попадают: агент не должен
@@ -256,9 +256,14 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines, roo
       if (files.length) {
         const named = [
           ...new Set(
-            [...text.matchAll(/`([^`]+)`/gu)]
-              .flatMap((match) => match[1].match(/[A-Za-z_]\w*/gu) || [])
-              .filter((token) => fields.has(token) && !models.has(token)),
+            [
+              ...[...text.matchAll(/`([^`]+)`/gu)]
+                .flatMap((match) => match[1].match(/[A-Za-z_]\w*/gu) || []),
+              // Поле может стоять без обратных кавычек, но рядом с цитатой:
+              // «- title (file:line server/prisma/schema.prisma:65)».
+              ...[...text.matchAll(/([A-Za-z_]\w*)[^\n]{0,40}?file:line/gu)]
+                .map((match) => match[1]),
+            ].filter((token) => fields.has(token) && !models.has(token)),
           ),
         ]
         if (named.length < 2) {
@@ -327,6 +332,9 @@ function walk(root, dir, depth = 0) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith('.') && entry.name !== '.clinerules') continue
     if (SKIP_DIRS.has(entry.name)) continue
+    // Lock-файлы — метаданные зависимостей, а не код проекта: их строки вроде
+    // "cli/index.js" модель принимает за файлы проекта и получает fail.
+    if (/^(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml)$/u.test(entry.name)) continue
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) out.push(...walk(root, full, depth + 1))
     else if (CODE_EXT.test(entry.name) && !/^vitest-[^/]*\.json$/u.test(entry.name)) out.push(full)

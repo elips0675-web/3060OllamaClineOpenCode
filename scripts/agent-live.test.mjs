@@ -270,6 +270,13 @@ describe('вердикт', () => {
       root: dir,
     }
     expect(autoVerdict(task, cited).pass).toBe(true)
+    const plain = {
+      ...ok,
+      answer: '- id (file:line server/prisma/schema.prisma:2)\n- title (file:line server/prisma/schema.prisma:3)\n'.repeat(5),
+      citations: [citation],
+      root: dir,
+    }
+    expect(autoVerdict(task, plain).pass).toBe(true)
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -379,12 +386,21 @@ describe('инструменты', () => {
     writeFileSync(path.join(root, 'PLAYBOOK.md'), 'const y = 2\n', 'utf8')
     writeFileSync(path.join(root, 'Что сделано.txt'), 'const y = 2\n', 'utf8')
     writeFileSync(path.join(root, 'vitest-server.json'), 'const y = 2\n', 'utf8')
+    mkdirSync(path.join(root, 'test-analysis'), { recursive: true })
+    writeFileSync(path.join(root, 'test-analysis', 'dump.json'), 'const y = 2\n', 'utf8')
     const found = searchTool(root, { pattern: 'const y' })
     expect(found).toContain('a.ts:2')
     expect(found).not.toContain('PLAYBOOK.md')
     expect(found).not.toContain('.txt')
     expect(found).not.toContain('vitest-server.json')
+    expect(found).not.toContain('test-analysis')
     expect(readFileTool(root, { path: 'PLAYBOOK.md', start: 1, end: 1 })).toContain('const y = 2')
+  })
+
+  it('search_files пропускает lock-файлы: их пути не код проекта', () => {
+    const root = make()
+    writeFileSync(path.join(root, 'package-lock.json'), '"msw": "cli/index.js"\n', 'utf8')
+    expect(searchTool(root, { pattern: 'cli/index.js' })).toContain('Ничего не найдено')
   })
 
   it('read_file отказывает на отчётах, дампах и журналах', () => {
