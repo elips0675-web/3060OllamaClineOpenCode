@@ -53,7 +53,7 @@ scripts\init-project.test.mjs    18 тестов установщика (vitest)
 scripts\agent-eval.mjs           эвалы: список задач, запись, счёт, порог
 scripts\agent-eval.test.mjs      23 теста эвалов (vitest)
 scripts\agent-live.mjs           живой прогон локальной моделью (read-only)
-scripts\agent-live.test.mjs      52 теста прогона (vitest)
+scripts\agent-live.test.mjs      59 тестов прогона (vitest)
 package.json                     команды тестов и гейтов бэклога
 README.md                        краткое описание репозитория на GitHub
 swiftmatch-3060.code-workspace   рабочее пространство VS Code + настройки

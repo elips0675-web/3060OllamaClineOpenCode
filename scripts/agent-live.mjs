@@ -80,13 +80,68 @@ export function safeResolve(root, target) {
 
 export function citationsOf(text) {
   const found = []
+  // Примеры кода в блоках ``` — это рекомендация, а не утверждение о проекте.
+  // Иначе «создайте src/config/constants.js» засчитывалось как выдуманный файл.
+  const source = String(text || '')
+    .replace(/```[\s\S]*?```/gu, ' ')
+    .replace(/~~~[\s\S]*?~~~/gu, ' ')
   const re = /(?:^|[\s`("'])((?:\.\/)?[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.(?:tsx?|jsx?|mjs|cjs|json|js|sql|prisma|ya?ml|css|md))(?![A-Za-z0-9(])(?::(\d+))?/gu
-  for (const match of String(text || '').matchAll(re)) {
+  for (const match of source.matchAll(re)) {
     const file = match[1].replace(/\\/g, '/').replace(/^\.\//u, '')
     if (/^https?:/u.test(file)) continue
     found.push({ path: file, line: match[2] ? Number(match[2]) : null })
   }
   return found
+}
+
+// Модель часто пишет не `path:line`, а блоком «**Файл:** `path`» +
+// «**Строка:** N». Без этого номер строки терялся, и E-07 не мог сверить,
+// что оба места содержат одно и то же правило.
+export function withDeclaredLines(answer, citations) {
+  const text = String(answer || '')
+  const declared = new Map()
+  const re = /`([^`\n]+\.(?:tsx?|jsx?|mjs|cjs|json|js|sql|prisma|ya?ml|css))`[\s\S]{0,120}?(?:строк[аиуы]?|lines?)[^\d\n]{0,15}(\d+)/giu
+  for (const match of text.matchAll(re)) {
+    const file = match[1].replace(/\\/g, '/').replace(/^\.\//u, '')
+    if (!declared.has(file)) declared.set(file, Number(match[2]))
+  }
+  const normalize = (file) => String(file || '').replace(/\\/g, '/').replace(/^\.\//u, '')
+  return citations.map((item) => {
+    if (item.line !== null) return item
+    const file = normalize(item.path)
+    let line = declared.get(file)
+    if (!line) {
+      const hit = [...declared.entries()].find(
+        ([key]) => key.endsWith(`/${file}`) || file.endsWith(`/${key}`),
+      )
+      line = hit ? hit[1] : undefined
+    }
+    return line ? { ...item, line } : item
+  })
+}
+
+// Общее правило в двух строках — это общее имя (MAX_TEXT) или общее число
+// (4000). Строки с разными константами (MAX_LINES vs MAX_TEXT) правилом не
+// считаются, даже если обе выглядят как «лимит».
+const RULE_STOP = new Set([
+  'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS',
+  'JSON', 'HTTP', 'HTTPS', 'API', 'URL', 'SQL', 'TRUE', 'FALSE', 'NULL',
+])
+
+function ruleTokens(source) {
+  const tokens = new Set()
+  const re = /(?<![A-Za-z0-9_])[A-Z][A-Z0-9_]{2,}(?![A-Za-z0-9_])|\b\d{2,}\b|'[^'\n]{3,}'|"[^"\n]{3,}"|`[^`\n]{3,}`/gu
+  for (const match of String(source || '').matchAll(re)) {
+    const token = match[0]
+    if (/^[A-Z]/u.test(token) && RULE_STOP.has(token)) continue
+    tokens.add(token)
+  }
+  return tokens
+}
+
+function overlap(left, right) {
+  for (const token of left) if (right.has(token)) return true
+  return false
 }
 
 function inventoryOf(root) {
@@ -152,8 +207,10 @@ function schemaFacts(root, citations) {
   return { fields, models, files }
 }
 
-export function autoVerdict(task, { answer, citations, fabricated, badLines, root }) {
-  const text = String(answer || '')
+export function autoVerdict(task, input) {
+  const text = String(input.answer || '')
+  const citations = withDeclaredLines(text, input.citations || [])
+  const { fabricated, badLines, root } = input
   if (parseTextCalls(text).length > 0) {
     return { pass: false, reason: 'ответ — вызов инструмента, а не вывод' }
   }
@@ -161,13 +218,9 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines, roo
     return { pass: false, reason: 'цитата из документации/отчёта, а не из кода' }
   }
   if (task.id === 'E-07' && /не найдено|нет дубл/iu.test(text)) {
-    if (/(?:^|[\s(`])(?:backups|coverage|logs|test-analysis|playwright-report)\/|vitest-[^\s`]*\.json|\.md\b|\.txt\b/iu.test(text)) {
-      return { pass: false, reason: '«не найдено» подтверждено отчётами/дампами, а не кодом' }
-    }
-    const named = /[A-Za-z0-9_./-]+\.(?:tsx?|jsx?|mjs|cjs|json|md|sql|prisma)/u.test(text)
-    return named
-      ? { pass: true, reason: 'честное «не найдено» с указанием файлов' }
-      : { pass: false, reason: '«не найдено» без указания проверенных файлов' }
+    // Дубль в проекте-полигоне есть (MAX_RETRIES в background.js и
+    // webhooks.service.js), поэтому «не найдено» — провал, а не честный ответ.
+    return { pass: false, reason: 'ответ «не найдено», хотя дубль существует: нужны два места с file:line' }
   }
   if (text.trim().length < 120) return { pass: false, reason: 'пустой/короткий ответ' }
   if (task.id === 'E-10') {
@@ -201,21 +254,66 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines, roo
       (item) => item.ok && item.line !== null && !isTest(item.resolved || item.path),
     )
     if (real.length < 2) {
+      // Разделяем причины: «сдался раньше» и «ссылки без номеров строк».
+      // Раньше оба случая давали неверную причину про тесты.
+      const codeWithLines = citations.filter(
+        (item) => item.ok && item.line !== null && !isTest(item.resolved || item.path),
+      )
+      if (codeWithLines.length < 2 && citations.some((item) => item.ok && item.line === null)) {
+        return { pass: false, reason: 'нужны два места с номерами строк: формат path:line' }
+      }
       return { pass: false, reason: 'дубль подтверждён тестами, а не двумя местами кода' }
     }
     if (new Set(real.map((item) => item.resolved || item.path)).size < 2) {
       return { pass: false, reason: 'оба места правила в одном файле' }
     }
     if (root) {
-      const code = real.filter((item) => {
-        if (item.line === null) return true
+      const sources = real.map((item) => {
         const full = path.resolve(root, item.resolved || item.path)
-        if (!existsSync(full)) return true
-        const source = readFileSync(full, 'utf8').split(/\r?\n/u)[item.line - 1] || ''
+        if (!existsSync(full)) return null
+        return readFileSync(full, 'utf8').split(/\r?\n/u)
+      })
+      const code = real.filter((item, index) => {
+        const lines = sources[index]
+        if (!lines) return true
+        const source = lines[item.line - 1] || ''
         return !/^\s*(?:\/\/|\/\*|\*|#)/u.test(source)
       })
       if (code.length < 2) {
         return { pass: false, reason: 'правило подтверждено комментариями, а не кодом' }
+      }
+      const slices = real.map((item, index) => {
+        const lines = sources[index]
+        if (!lines) return { file: item.resolved || item.path, line: '', window: '' }
+        if (item.line > lines.length) return { overflow: true }
+        const start = item.line - 1
+        return {
+          file: item.resolved || item.path,
+          line: lines[start] || '',
+          window: lines.slice(start, start + 3).join('\n'),
+        }
+      })
+      if (slices.some((slice) => slice.overflow)) {
+        return { pass: false, reason: 'строка из «Строка:» за концом файла' }
+      }
+      const files = new Set(slices.map((slice) => slice.file))
+      if (files.size >= 2) {
+        // Сверяем именно правило: общее имя константы или общее число.
+        const shared = (key) => {
+          for (let i = 0; i < slices.length; i += 1) {
+            for (let j = i + 1; j < slices.length; j += 1) {
+              if (slices[i].file === slices[j].file) continue
+              if (overlap(ruleTokens(slices[i][key]), ruleTokens(slices[j][key]))) return true
+            }
+          }
+          return false
+        }
+        if (!shared('line') && !shared('window')) {
+          return {
+            pass: false,
+            reason: 'в процитированных строках разные правила: нет общего имени или числа',
+          }
+        }
       }
     }
   }
@@ -511,6 +609,23 @@ async function chat(host, payload, timeoutMs) {
   }
 }
 
+export async function runtimeVersion(host, timeoutMs = 5000) {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const response = await fetch(`${host}/api/version`, { signal: controller.signal })
+      if (!response.ok) return ''
+      const data = await response.json()
+      return String(data.version || '')
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch {
+    return ''
+  }
+}
+
 export async function runTask(task, options) {
   const { root, host, model, maxCalls, timeoutMs } = options
   const messages = initialMessages(task, root)
@@ -720,6 +835,7 @@ async function main(argv) {
   }
 
   const rows = []
+  const runtime = { ollama: await runtimeVersion(options.host) }
   for (const task of selected) {
     process.stderr.write(`… ${task.id} ${task.title}\n`)
     try {
@@ -743,6 +859,7 @@ async function main(argv) {
       generatedAt: new Date().toISOString(),
       model: options.model,
       root,
+      runtime,
       kind: 'auto-readonly',
       rows,
     }
