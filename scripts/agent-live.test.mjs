@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
@@ -15,6 +16,7 @@ import {
   parseTextCalls,
   readFileTool,
   rescoreRows,
+  runTask,
   safeResolve,
   searchTool,
   summarize,
@@ -560,5 +562,51 @@ describe('аргументы', () => {
   it('падает на неизвестном аргументе и без значения', () => {
     expect(() => parseArgs(['лишнее'])).toThrow(/неизвестный/)
     expect(() => parseArgs(['--root'])).toThrow(/--root/)
+  })
+})
+
+describe('обрыв ответа по num_predict', () => {
+  const stub = (replies) => createServer((req, res) => {
+    req.on('data', () => {})
+    req.on('end', () => {
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify(replies.shift() || { message: { content: '' }, done_reason: 'stop' }))
+    })
+  })
+
+  const listen = async (server) => {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    return `http://127.0.0.1:${server.address().port}`
+  }
+
+  it('просит продолжить и склеивает части без пометки', async () => {
+    const server = stub([
+      { message: { role: 'assistant', content: 'Часть один.' }, done_reason: 'length' },
+      { message: { role: 'assistant', content: 'Часть два.' }, done_reason: 'stop' },
+    ])
+    try {
+      const host = await listen(server)
+      const result = await runTask(TASK, { root: '.', host, model: 'm', maxCalls: 1, timeoutMs: 5000 })
+      expect(result.answer).toContain('Часть один.')
+      expect(result.answer).toContain('Часть два.')
+      expect(result.answer).not.toContain('[ответ обрезан')
+    } finally {
+      server.close()
+    }
+  })
+
+  it('ставит пометку, если лимит не отпустил после двух продолжений', async () => {
+    const server = stub([
+      { message: { content: 'А' }, done_reason: 'length' },
+      { message: { content: 'Б' }, done_reason: 'length' },
+      { message: { content: 'В' }, done_reason: 'length' },
+    ])
+    try {
+      const host = await listen(server)
+      const result = await runTask(TASK, { root: '.', host, model: 'm', maxCalls: 1, timeoutMs: 5000 })
+      expect(result.answer).toContain('[ответ обрезан')
+    } finally {
+      server.close()
+    }
   })
 })

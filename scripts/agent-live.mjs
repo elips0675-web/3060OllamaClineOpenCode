@@ -519,6 +519,32 @@ export async function runTask(task, options) {
   let toolCalls = 0
   const trace = []
 
+  // Модель может упереться в num_predict и оборвать ответ на полуслове
+  // (в живом прогоне E-07 так потерялся второй MAX_RETRIES). Просим
+  // продолжить с места обрыва; если лимит не отпустил — честно помечаем.
+  const finishAnswer = async (text, reason, baseMessages) => {
+    let answer = String(text || '')
+    let stop = reason
+    for (let i = 0; i < 2 && stop === 'length'; i += 1) {
+      const next = await chat(host, {
+        model,
+        messages: [
+          ...baseMessages,
+          { role: 'assistant', content: answer },
+          { role: 'user', content: 'Ответ обрезан лимитом. Продолжи с места обрыва, без повторов и вступлений.' },
+        ],
+        stream: false,
+        options: { temperature: 0.1, top_p: 0.9, num_ctx: 12288, num_predict: 900 },
+      }, timeoutMs)
+      const chunk = String(next.message?.content || '')
+      if (!chunk.trim()) break
+      answer += `${answer.endsWith('\n') || chunk.startsWith('\n') ? '' : '\n'}${chunk}`
+      stop = next.done_reason
+    }
+    if (stop === 'length') answer += '\n\n[ответ обрезан: лимит модели]'
+    return answer
+  }
+
   for (;;) {
     const data = await chat(host, {
       model,
@@ -536,12 +562,14 @@ export async function runTask(task, options) {
       }
     }
     if (calls.length === 0) {
-      return { answer: String(message.content || ''), toolCalls, trace }
+      const answer = await finishAnswer(message.content, data.done_reason, messages)
+      return { answer, toolCalls, trace }
     }
     if (toolCalls >= maxCalls) {
       messages.push({ role: 'user', content: 'Лимит инструментов исчерпан. Дай финальный ответ по уже прочитанному.' })
-      const final = await chat(host, { model, messages, stream: false, options: { temperature: 0.1, num_ctx: 12288, num_predict: 700 } }, timeoutMs)
-      return { answer: String(final.message?.content || ''), toolCalls, trace }
+      const final = await chat(host, { model, messages, stream: false, options: { temperature: 0.1, num_ctx: 12288, num_predict: 900 } }, timeoutMs)
+      const answer = await finishAnswer(final.message?.content, final.done_reason, messages)
+      return { answer, toolCalls, trace }
     }
     messages.push({ role: 'assistant', content: message.content || '', tool_calls: calls })
     for (const call of calls) {
