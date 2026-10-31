@@ -6,7 +6,7 @@
 
 Состав (7 файлов, порядок = порядок в файле):
    1. scripts/next-task.test.mjs — 23219 байт, 519 строк
-   2. scripts/agent-live.test.mjs — 27696 байт, 613 строк
+   2. scripts/agent-live.test.mjs — 31948 байт, 729 строк
    3. scripts/backlog.test.mjs — 10011 байт, 272 строк
    4. scripts/ai-profile.test.mjs — 11579 байт, 299 строк
    5. scripts/project-brief.test.mjs — 9414 байт, 249 строк
@@ -541,7 +541,7 @@ describe('watch-пункты', () => {
 })
 
 ================================================================================
-ФАЙЛ: scripts/agent-live.test.mjs  (27696 байт, 613 строк)
+ФАЙЛ: scripts/agent-live.test.mjs  (31948 байт, 729 строк)
 ================================================================================
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -563,9 +563,11 @@ import {
   readFileTool,
   rescoreRows,
   runTask,
+  runtimeVersion,
   safeResolve,
   searchTool,
   summarize,
+  withDeclaredLines,
 } from './agent-live.mjs'
 
 const TASK = { id: 'E-01', title: 'Точка входа', prompt: 'Найди вход и объясни старт.', criterion: '3 факта с file:line' }
@@ -596,6 +598,11 @@ describe('цитаты', () => {
   it('не принимает вызов функции за файл', () => {
     expect(citationsOf('`app.use(express.json())`')).toEqual([])
     expect(citationsOf('`Sentry.Handlers.requestHandler()`')).toEqual([])
+  })
+
+  it('не считает пример в блоке ``` цитатой проекта', () => {
+    const text = 'Факт: `src/a.ts:3`.\n\n```js\n// src/config/constants.js\nimport x from "./missing.js"\n```\n'
+    expect(citationsOf(text)).toEqual([{ path: 'src/a.ts', line: 3 }])
   })
 })
 
@@ -700,24 +707,19 @@ describe('вердикт', () => {
     expect(autoVerdict(task, refusal).pass).toBe(true)
   })
 
-  it('E-07 «не найдено» без файлов — fail, с файлами — pass', () => {
+  it('E-07 «не найдено» — fail: дубль в проекте есть', () => {
     const task = { ...TASK, id: 'E-07' }
     const bare = { answer: 'Не найдено. Проверил файлы с упоминаниями.', citations: [], fabricated: 0, badLines: 0 }
-    expect(autoVerdict(task, bare).reason).toMatch(/без указания/)
+    expect(autoVerdict(task, bare).pass).toBe(false)
     const named = {
       answer: 'Не найдено: проверил server/src/app.js и server/src/routes/tickets.js, дубля нет.',
       citations: [],
       fabricated: 0,
       badLines: 0,
     }
-    expect(autoVerdict(task, named).pass).toBe(true)
-    const viaDocs = {
-      answer: 'Не найдено: проверил AGENTS.md и backups/db.sql, дубля нет.',
-      citations: [],
-      fabricated: 0,
-      badLines: 0,
-    }
-    expect(autoVerdict(task, viaDocs).reason).toMatch(/отчётами\/дампами/)
+    const verdict = autoVerdict(task, named)
+    expect(verdict.pass).toBe(false)
+    expect(verdict.reason).toMatch(/дубль существует/)
   })
 
   it('E-09 не принимает markdown вместо схемы', () => {
@@ -1154,6 +1156,120 @@ describe('обрыв ответа по num_predict', () => {
     } finally {
       server.close()
     }
+  })
+})
+
+describe('версия рантайма', () => {
+  it('берёт версию Ollama из /api/version', async () => {
+    const server = createServer((req, res) => {
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ version: '0.20.5' }))
+    })
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const host = `http://127.0.0.1:${server.address().port}`
+      expect(await runtimeVersion(host)).toBe('0.20.5')
+    } finally {
+      server.close()
+    }
+  })
+
+  it('возвращает пустую строку, если Ollama недоступна', async () => {
+    expect(await runtimeVersion('http://127.0.0.1:1', 500)).toBe('')
+  })
+})
+
+describe('E-07: формат «Файл/Строка» и сверка правила', () => {
+  let dir
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+    dir = null
+  })
+
+  const make = (files) => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-e07-'))
+    for (const [name, body] of Object.entries(files)) {
+      const full = path.join(dir, name)
+      mkdirSync(path.dirname(full), { recursive: true })
+      writeFileSync(full, body, 'utf8')
+    }
+    return dir
+  }
+
+  const answer = (left, right) => `Нашёл дубль бизнес-правила.
+
+Место 1:
+**Файл:** \`${left.file}\`
+**Строка:** ${left.line}
+**Код:** \`${left.code}\`
+
+Место 2:
+**Файл:** \`${right.file}\`
+**Строка:** ${right.line}
+**Код:** \`${right.code}\`
+
+Гроза: если менять лимит только в одном месте, поведение разойдётся.`
+
+  const judge = (root, text) => {
+    const check = checkCitations(root, citationsOf(text))
+    return autoVerdict({ ...TASK, id: 'E-07' }, {
+      answer: text,
+      citations: check.checked,
+      fabricated: check.fabricated,
+      badLines: check.badLines,
+      root,
+    })
+  }
+
+  it('берёт номер строки из блока «Файл» + «Строка»', () => {
+    const text = answer(
+      { file: 'a.js', line: 3, code: 'export const MAX_LINES = 450' },
+      { file: 'b.js', line: 2, code: 'const MAX_TEXT = 4000' },
+    )
+    const citations = citationsOf(text)
+    expect(citations.every((item) => item.line === null)).toBe(true)
+    const enriched = withDeclaredLines(text, citations)
+    expect(enriched[0]).toMatchObject({ path: 'a.js', line: 3 })
+    expect(enriched[1]).toMatchObject({ path: 'b.js', line: 2 })
+  })
+
+  it('не принимает две разные константы за одно правило', () => {
+    const root = make({
+      'a.js': 'one\ntwo\nexport const MAX_LINES = 450\n',
+      'b.js': 'one\nconst MAX_TEXT = 4000\n',
+    })
+    const verdict = judge(root, answer(
+      { file: 'a.js', line: 3, code: 'export const MAX_LINES = 450' },
+      { file: 'b.js', line: 2, code: 'const MAX_TEXT = 4000' },
+    ))
+    expect(verdict.pass).toBe(false)
+    expect(verdict.reason).toMatch(/разные правила/)
+  })
+
+  it('принимает одну константу в двух файлах', () => {
+    const root = make({
+      'a.js': 'one\ntwo\nconst MAX_TEXT = 4000\n',
+      'b.js': 'one\nconst MAX_TEXT = 4000\n',
+    })
+    const verdict = judge(root, answer(
+      { file: 'a.js', line: 3, code: 'const MAX_TEXT = 4000' },
+      { file: 'b.js', line: 2, code: 'const MAX_TEXT = 4000' },
+    ))
+    expect(verdict.pass).toBe(true)
+  })
+
+  it('отдельная причина, если места названы без номеров строк', () => {
+    const root = make({ 'a.js': 'const MAX_TEXT = 4000\n', 'b.js': 'const MAX_TEXT = 4000\n' })
+    const check = checkCitations(root, citationsOf('Дубль в `a.js` и `b.js`. '.repeat(6)))
+    const verdict = autoVerdict({ ...TASK, id: 'E-07' }, {
+      answer: 'Дубль в `a.js` и `b.js`. '.repeat(6),
+      citations: check.checked,
+      fabricated: check.fabricated,
+      badLines: check.badLines,
+      root,
+    })
+    expect(verdict.pass).toBe(false)
+    expect(verdict.reason).toMatch(/формат path:line/)
   })
 })
 
