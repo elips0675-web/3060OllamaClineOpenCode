@@ -5,9 +5,9 @@
 Как читать: это «промптовая» часть комплекта. Если вопрос «почему агент ведёт себя так» — ответ здесь, а не в коде.
 
 Состав (26 файлов, порядок = порядок в файле):
-   1. .clinerules — 13399 байт, 168 строк
+   1. .clinerules — 13470 байт, 169 строк
    2. switch-ai.bat — 602 байт, 18 строк
-   3. package.json — 1668 байт, 33 строк
+   3. package.json — 1819 байт, 35 строк
    4. models/Modelfile-14b-q4 — 402 байт, 11 строк
    5. models/Modelfile-14b-q6 — 409 байт, 11 строк
    6. models/Modelfile-7b-q5 — 541 байт, 12 строк
@@ -37,7 +37,7 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: .clinerules  (13399 байт, 168 строк)
+ФАЙЛ: .clinerules  (13470 байт, 169 строк)
 ================================================================================
 
 # SwiftMatch — жёсткие правила для ИИ-агента (Cline / Roo Code)
@@ -50,6 +50,7 @@
 >
 > Команды в п. 3, 4 и 7 относятся к тому проекту. В комплекте работают только:
 > `npm.cmd test`, `npm.cmd run check:backlog`, `npm.cmd run retent:check`,
+> `npm.cmd run stage:section "<ID (этап N): заголовок>"`,
 > `node test/build-pack.mjs --check` и `node scripts/next-task.mjs`. Скриптов
 > `typecheck`, `check:docs`, `check:n-plus-one`, `check:enum-constraints`,
 > `check:prod-mock`, `check:mirrors` и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
@@ -231,7 +232,7 @@ node --no-warnings "%SCRIPT%" %*
 endlocal
 
 ================================================================================
-ФАЙЛ: package.json  (1668 байт, 33 строк)
+ФАЙЛ: package.json  (1819 байт, 35 строк)
 ================================================================================
 
 {
@@ -241,8 +242,10 @@ endlocal
   "type": "module",
   "description": "Offline coding-agent kit for RTX 3060: task selection, local/cloud switching and route (snapshot of SwiftMatch scripts)",
   "scripts": {
-    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs",
+    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs",
     "test:retent": "vitest run scripts/retention-gate.test.mjs",
+    "test:section": "vitest run scripts/stage-section.test.mjs",
+    "stage:section": "node scripts/stage-section.mjs",
     "test:next": "vitest run scripts/next-task.test.mjs",
     "test:ai": "vitest run scripts/ai-profile.test.mjs",
     "test:brief": "vitest run scripts/project-brief.test.mjs",

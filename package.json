@@ -5,8 +5,10 @@
   "type": "module",
   "description": "Offline coding-agent kit for RTX 3060: task selection, local/cloud switching and route (snapshot of SwiftMatch scripts)",
   "scripts": {
-    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs",
+    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs",
     "test:retent": "vitest run scripts/retention-gate.test.mjs",
+    "test:section": "vitest run scripts/stage-section.test.mjs",
+    "stage:section": "node scripts/stage-section.mjs",
     "test:next": "vitest run scripts/next-task.test.mjs",
     "test:ai": "vitest run scripts/ai-profile.test.mjs",
     "test:brief": "vitest run scripts/project-brief.test.mjs",

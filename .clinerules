@@ -8,6 +8,7 @@
 >
 > Команды в п. 3, 4 и 7 относятся к тому проекту. В комплекте работают только:
 > `npm.cmd test`, `npm.cmd run check:backlog`, `npm.cmd run retent:check`,
+> `npm.cmd run stage:section "<ID (этап N): заголовок>"`,
 > `node test/build-pack.mjs --check` и `node scripts/next-task.mjs`. Скриптов
 > `typecheck`, `check:docs`, `check:n-plus-one`, `check:enum-constraints`,
 > `check:prod-mock`, `check:mirrors` и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
