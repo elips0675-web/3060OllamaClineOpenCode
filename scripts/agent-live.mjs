@@ -197,9 +197,26 @@ export function autoVerdict(task, { answer, citations, fabricated, badLines, roo
   }
   if (task.id === 'E-07') {
     const isTest = (file) => /(?:^|\/)(?:__tests__|tests?)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)
-    const real = citations.filter((item) => item.ok && !isTest(item.resolved || item.path))
+    const real = citations.filter(
+      (item) => item.ok && item.line !== null && !isTest(item.resolved || item.path),
+    )
     if (real.length < 2) {
       return { pass: false, reason: 'дубль подтверждён тестами, а не двумя местами кода' }
+    }
+    if (new Set(real.map((item) => item.resolved || item.path)).size < 2) {
+      return { pass: false, reason: 'оба места правила в одном файле' }
+    }
+    if (root) {
+      const code = real.filter((item) => {
+        if (item.line === null) return true
+        const full = path.resolve(root, item.resolved || item.path)
+        if (!existsSync(full)) return true
+        const source = readFileSync(full, 'utf8').split(/\r?\n/u)[item.line - 1] || ''
+        return !/^\s*(?:\/\/|\/\*|\*|#)/u.test(source)
+      })
+      if (code.length < 2) {
+        return { pass: false, reason: 'правило подтверждено комментариями, а не кодом' }
+      }
     }
   }
   if (fabricated > 0) return { pass: false, reason: `выдуманные файлы: ${fabricated}` }
@@ -381,6 +398,7 @@ export function initialMessages(task, root) {
         '',
         'ЗАПРЕТЫ',
         '- Цитировать и открывать .md, .txt, отчёты, coverage/, logs/, backups/.',
+        '- Тест — не поведение кода.',
         '- Называть файл, функцию или поле, которых не видел в выводе инструмента.',
         '- Писать вызов инструмента вместо вывода.',
         '- Утверждать «X зависит от Y» без чтения X.',
@@ -391,6 +409,7 @@ export function initialMessages(task, root) {
         '- Ссылки на файл ищи по имени (index.js), а не по полному пути.',
         '- Точка входа — то, что запускается: scripts в package.json, server.listen.',
         '- Схема БД — .prisma или .sql.',
+        '- Роут — mount или app.get, не middleware.',
         '',
         'Если задача > 6 файлов или деньги/доступы/БД — откажись, предложи облако.',
         `Корень: ${root}`,

@@ -185,16 +185,16 @@ describe('вердикт', () => {
     const withTest = {
       ...ok,
       citations: [
-        { path: 'scripts/check-schema.mjs', ok: true },
-        { path: 'scripts/check-schema.test.mjs', ok: true },
+        { path: 'scripts/check-schema.mjs', line: 62, ok: true },
+        { path: 'scripts/check-schema.test.mjs', line: 89, ok: true },
       ],
     }
     expect(autoVerdict(task, withTest).reason).toMatch(/тестами/)
     const real = {
       ...ok,
       citations: [
-        { path: 'server/src/validate.js', ok: true },
-        { path: 'server/src/routes/tickets.js', ok: true },
+        { path: 'server/src/validate.js', line: 10, ok: true },
+        { path: 'server/src/routes/tickets.js', line: 20, ok: true },
       ],
     }
     expect(autoVerdict(task, real).pass).toBe(true)
@@ -226,6 +226,27 @@ describe('вердикт', () => {
         .map((prefix, index) => `mount('${prefix}', router) — server/src/app.js:${143 + index}`).join('\n'),
     }
     expect(autoVerdict(task, mounts).pass).toBe(true)
+  })
+
+  it('E-07 не принимает комментарии вместо кода', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'agent-dup-'))
+    mkdirSync(path.join(dir, 'src'), { recursive: true })
+    writeFileSync(path.join(dir, 'src', 'a.js'), '// лимит 10\n', 'utf8')
+    writeFileSync(path.join(dir, 'src', 'b.js'), '// лимит 10\n', 'utf8')
+    const task = { ...TASK, id: 'E-07' }
+    const comments = {
+      ...ok,
+      citations: [
+        { path: 'src/a.js', line: 1, ok: true },
+        { path: 'src/b.js', line: 1, ok: true },
+      ],
+      root: dir,
+    }
+    expect(autoVerdict(task, comments).reason).toMatch(/комментариями/)
+    writeFileSync(path.join(dir, 'src', 'a.js'), "if (n > 10) return 'лимит'\n", 'utf8')
+    writeFileSync(path.join(dir, 'src', 'b.js'), "if (n > 10) return 'лимит'\n", 'utf8')
+    expect(autoVerdict(task, comments).pass).toBe(true)
+    rmSync(dir, { recursive: true, force: true })
   })
 
   it('E-09 требует назвать поля из схемы, а не только таблицы', () => {
