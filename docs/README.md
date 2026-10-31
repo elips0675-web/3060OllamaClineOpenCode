@@ -11,6 +11,7 @@
 | `README.md` | обзор комплекта, состав, быстрый старт |
 | `00-ЧИТАЙ-ПЕРВЫМ.txt` | порядок чтения и карта файлов |
 | `docs/AGENTS-workflow.md` | механика «Что сделано ↔ Что доделать», чекпойнт, гейт |
+| `docs/AGENTS-production.md` | что значит «готово»: таблица «создано ↔ доказано», pre-flight из 5 пунктов |
 | `docs/AGENTS-cline-setup.md` | Compact Prompt, лимиты 14B, Confidence Check, Memory Bank |
 | `docs/AGENTS-openclose-experiment.md` | внешний харнесс OpenClose: установка, патч, результаты |
 | `docs/AGENTS-remote-eval.md` | прогон эвалов без 3060: бесплатные GPU-ноутбуки, границы |

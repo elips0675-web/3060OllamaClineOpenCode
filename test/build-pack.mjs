@@ -65,6 +65,7 @@ const DOCS_DETAIL = [
   'docs/README.md',
   'docs/AGENTS-cline-setup.md',
   'docs/AGENTS-workflow.md',
+  'docs/AGENTS-production.md',
   'docs/AGENTS-kaggle-runbook.md',
   'docs/AGENTS-openclose-experiment.md',
   'docs/AGENTS-remote-eval.md',
@@ -80,6 +81,8 @@ const TESTS = [
   'scripts/project-brief.test.mjs',
   'scripts/agent-eval.test.mjs',
   'scripts/init-project.test.mjs',
+  'scripts/retention-gate.test.mjs',
+  'scripts/stage-section.test.mjs',
 ];
 
 function read(rel) {
@@ -200,10 +203,19 @@ results.push(
   }),
 );
 
+function backlogCounts() {
+  const text = read('Что доделать.txt');
+  const open = text.split('\n').filter((line) => /^### [A-Z]/u.test(line)).length;
+  const closed = text.split('\n').filter((line) => /^## ✅ /u.test(line)).length;
+  return { open, closed };
+}
+
+const counts = backlogCounts();
+
 results.push(
   build({
     file: '07-Тесты.txt',
-    title: 'ТЕСТЫ: семь файлов vitest, 217 проверок',
+    title: `ТЕСТЫ: ${TESTS.length} файлов vitest (число проверок — вывод npm.cmd test)`,
     purpose:
       'доказательство поведения: что именно проверяется и чего тесты не проверяют.',
     note:
@@ -216,8 +228,7 @@ results.push(
   build({
     file: '08-Что-доделать.txt',
     title: 'ЧТО ДОДЕЛАТЬ: открытые пункты бэклога комплекта (снимок)',
-    purpose:
-      'актуальная очередь: 17 открытых пунктов с ID, фактами и статусами, плюс правила ведения бэклога и определение готовности.',
+    purpose: `актуальная очередь: ${counts.open} открытых пунктов с ID, фактами и статусами, плюс ${counts.closed} закрытых строк и правила ведения бэклога.`,
     note:
       'статусы: ⏳ (проверено ДД.ММ.ГГГГ) — открыто; (blocked: …) — ждёт внешнего; (watch: …) — отложено осознанно; ✅ — закрыто.',
     files: ['Что доделать.txt'],
