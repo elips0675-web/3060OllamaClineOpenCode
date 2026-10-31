@@ -5,7 +5,7 @@
 Как читать: тесты — это спецификация в исполняемом виде. Если утверждение в документации не покрыто тестом, считайте его заявлением, а не фактом.
 
 Состав (7 файлов, порядок = порядок в файле):
-   1. scripts/next-task.test.mjs — 23219 байт, 519 строк
+   1. scripts/next-task.test.mjs — 25165 байт, 559 строк
    2. scripts/agent-live.test.mjs — 33789 байт, 780 строк
    3. scripts/backlog.test.mjs — 10011 байт, 272 строк
    4. scripts/ai-profile.test.mjs — 11579 байт, 299 строк
@@ -18,7 +18,7 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: scripts/next-task.test.mjs  (23219 байт, 519 строк)
+ФАЙЛ: scripts/next-task.test.mjs  (25165 байт, 559 строк)
 ================================================================================
 
 import { describe, expect, it } from 'vitest'
@@ -326,6 +326,46 @@ describe('gatesFor', () => {
   it('для серверного файла добавляет N+1, для docs — check:docs', () => {
     expect(gatesFor(byId(items, 'COV-02'))).toContain('npm.cmd run check:n-plus-one')
     expect(gatesFor(byId(items, 'CI-01'))).toContain('npm.cmd run check:docs')
+  })
+})
+
+describe('gatesFor с реальным package.json', () => {
+  const items = parseBacklog(FIXTURE)
+  const kit = {
+    root: '.',
+    scripts: { test: 'vitest run', 'check:backlog': 'node scripts/backlog.mjs check' },
+    deps: { vitest: '^3.2.6' },
+  }
+
+  it('не предлагает гейты, которых нет в package.json', () => {
+    const gates = gatesFor(byId(items, 'QA-01'), kit)
+    expect(gates).not.toContain('npx.cmd eslint <изменённые файлы>')
+    expect(gates).not.toContain('npm.cmd run typecheck')
+    expect(gates).toContain('npm.cmd test -- <тест затронутого файла>')
+  })
+
+  it('добавляет гейты комплекта и не дублирует тест', () => {
+    const gates = gatesFor(byId(items, 'CI-01'), kit)
+    expect(gates).toContain('npm.cmd test')
+    expect(gates).toContain('node test/build-pack.mjs --check')
+    expect(gates).toContain('npm.cmd run check:backlog')
+    expect(gates).not.toContain('npm.cmd run retent:check')
+    expect(gates.filter((gate) => gate.startsWith('npm.cmd test')).length).toBe(1)
+  })
+
+  it('включает retent:check, когда скрипт объявлен', () => {
+    const project = { ...kit, scripts: { ...kit.scripts, 'retent:check': 'node scripts/retention-gate.mjs' } }
+    expect(gatesFor(byId(items, 'CI-01'), project)).toContain('npm.cmd run retent:check')
+  })
+
+  it('без проекта ведёт себя как раньше: фильтра нет', () => {
+    expect(gatesFor(byId(items, 'QA-01'))).toContain('npx.cmd eslint <изменённые файлы>')
+  })
+
+  it('промпт называет проект карточки, а не чужой путь', () => {
+    const card = buildCard(byId(items, 'QA-01'), { ...kit, root: 'D:/project' })
+    expect(card).toContain('Работаем с проектом project в D:/project')
+    expect(card).not.toContain('SwiftMatch')
   })
 })
 

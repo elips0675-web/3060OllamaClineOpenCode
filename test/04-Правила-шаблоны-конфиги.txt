@@ -5,7 +5,7 @@
 Как читать: это «промптовая» часть комплекта. Если вопрос «почему агент ведёт себя так» — ответ здесь, а не в коде.
 
 Состав (26 файлов, порядок = порядок в файле):
-   1. .clinerules — 12021 байт, 152 строк
+   1. .clinerules — 13371 байт, 168 строк
    2. switch-ai.bat — 602 байт, 18 строк
    3. package.json — 1439 байт, 30 строк
    4. models/Modelfile-14b-q4 — 402 байт, 11 строк
@@ -15,7 +15,7 @@
    8. models/Modelfile-tiny — 474 байт, 11 строк
    9. templates/agent-protocol.md — 4643 байт, 68 строк
   10. templates/few-shot.md — 2321 байт, 62 строк
-  11. templates/verify-checklist.md — 2963 байт, 55 строк
+  11. templates/verify-checklist.md — 3417 байт, 61 строк
   12. templates/analysis-card.md — 1876 байт, 53 строк
   13. templates/analysis-rules.md — 2535 байт, 37 строк
   14. templates/rules/00-project.md — 1404 байт, 40 строк
@@ -37,15 +37,31 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: .clinerules  (12021 байт, 152 строк)
+ФАЙЛ: .clinerules  (13371 байт, 168 строк)
 ================================================================================
 
 # SwiftMatch — жёсткие правила для ИИ-агента (Cline / Roo Code)
 
+> **Это пример правил, а не правила комплекта.** Так выглядит `.clinerules`
+> реального проекта (React + Express + MySQL), из которого собран комплект;
+> `README.md:45` называет файл «копией проектного». Правила для нового проекта
+> ставит `scripts/init-project.mjs`: `templates/rules/00-project.md`,
+> `templates/agent-protocol.md`, `templates/workflows/`, `templates/few-shot.md`.
+>
+> Команды в п. 3, 4 и 7 относятся к тому проекту. В комплекте работают только:
+> `npm.cmd test`, `npm.cmd run check:backlog`, `node test/build-pack.mjs --check`
+> и `node scripts/next-task.mjs`. Скриптов `typecheck`, `check:docs`,
+> `check:n-plus-one`, `check:enum-constraints`, `check:prod-mock`, `check:mirrors`
+> и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
+> `check:backlog`, `backlog:*`, `eval:*`, `init:project`, а `devDependencies` —
+> только `vitest`. Пропущенные команды в карточку задачи не попадают:
+> `gatesFor` (`scripts/next-task.mjs`) отбрасывает гейт, которого нет в
+> `package.json`.
+
 Проект: React 18 + TS strict + Tailwind v3 + shadcn/ui + Vite (front 8081), Express (API 3002),
 MySQL 3306, Redis (опционально, in-memory fallback), Socket.IO, Capacitor Android.
 Канон правил автора: AGENTS.md + docs/AGENTS-*.md. Бэклог задач: «Что доделать.txt».
-Копия документации для чтения: D:\ИИ агент\test (побайтовые зеркала).
+Пакет для внешнего ИИ: `test/` — собирается `node test/build-pack.mjs`, проверяется `--check`.
 
 ## 1. Работать только из бэклога
 Перед любым действием открой «Что доделать.txt» и возьми задачу по ID (QA-01, COV-02, SRCH-01 …).
@@ -463,7 +479,7 @@ PARAMETER temperature 0.1
 Плохо: «поле, вероятно, называется `user_id`» без чтения схемы.
 
 ================================================================================
-ФАЙЛ: templates/verify-checklist.md  (2963 байт, 55 строк)
+ФАЙЛ: templates/verify-checklist.md  (3417 байт, 61 строк)
 ================================================================================
 
 # Чек-лист проверки (для агента и человека)
@@ -490,13 +506,19 @@ PARAMETER temperature 0.1
 
 ## Команды-заготовки (заменить на проектные)
 
+В комплекте работают эти:
+
 ```bat
-npx.cmd eslint <изменённый файл>
-npm.cmd run typecheck
-npm.cmd test -- <точечный тест>
-npm.cmd run check:docs
-npx.cmd vite build
+npm.cmd test
+npm.cmd run check:backlog
+node test/build-pack.mjs --check
 ```
+
+В проекте-образце (SwiftMatch) к ним добавляются `npx.cmd eslint <файл>`,
+`npm.cmd run typecheck`, `npm.cmd test -- <точечный тест>`, `npm.cmd run check:docs`,
+`npx.cmd vite build` — они ставятся вместе с проектом, в комплекте этих скриптов
+и инструментов нет. Проверять надо те, что есть в `package.json` проекта, а не
+список выше.
 
 ## Признаки «зелено»
 

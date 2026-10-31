@@ -1,9 +1,25 @@
 # SwiftMatch — жёсткие правила для ИИ-агента (Cline / Roo Code)
 
+> **Это пример правил, а не правила комплекта.** Так выглядит `.clinerules`
+> реального проекта (React + Express + MySQL), из которого собран комплект;
+> `README.md:45` называет файл «копией проектного». Правила для нового проекта
+> ставит `scripts/init-project.mjs`: `templates/rules/00-project.md`,
+> `templates/agent-protocol.md`, `templates/workflows/`, `templates/few-shot.md`.
+>
+> Команды в п. 3, 4 и 7 относятся к тому проекту. В комплекте работают только:
+> `npm.cmd test`, `npm.cmd run check:backlog`, `node test/build-pack.mjs --check`
+> и `node scripts/next-task.mjs`. Скриптов `typecheck`, `check:docs`,
+> `check:n-plus-one`, `check:enum-constraints`, `check:prod-mock`, `check:mirrors`
+> и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
+> `check:backlog`, `backlog:*`, `eval:*`, `init:project`, а `devDependencies` —
+> только `vitest`. Пропущенные команды в карточку задачи не попадают:
+> `gatesFor` (`scripts/next-task.mjs`) отбрасывает гейт, которого нет в
+> `package.json`.
+
 Проект: React 18 + TS strict + Tailwind v3 + shadcn/ui + Vite (front 8081), Express (API 3002),
 MySQL 3306, Redis (опционально, in-memory fallback), Socket.IO, Capacitor Android.
 Канон правил автора: AGENTS.md + docs/AGENTS-*.md. Бэклог задач: «Что доделать.txt».
-Копия документации для чтения: D:\ИИ агент\test (побайтовые зеркала).
+Пакет для внешнего ИИ: `test/` — собирается `node test/build-pack.mjs`, проверяется `--check`.
 
 ## 1. Работать только из бэклога
 Перед любым действием открой «Что доделать.txt» и возьми задачу по ID (QA-01, COV-02, SRCH-01 …).

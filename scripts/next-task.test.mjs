@@ -306,6 +306,46 @@ describe('gatesFor', () => {
   })
 })
 
+describe('gatesFor с реальным package.json', () => {
+  const items = parseBacklog(FIXTURE)
+  const kit = {
+    root: '.',
+    scripts: { test: 'vitest run', 'check:backlog': 'node scripts/backlog.mjs check' },
+    deps: { vitest: '^3.2.6' },
+  }
+
+  it('не предлагает гейты, которых нет в package.json', () => {
+    const gates = gatesFor(byId(items, 'QA-01'), kit)
+    expect(gates).not.toContain('npx.cmd eslint <изменённые файлы>')
+    expect(gates).not.toContain('npm.cmd run typecheck')
+    expect(gates).toContain('npm.cmd test -- <тест затронутого файла>')
+  })
+
+  it('добавляет гейты комплекта и не дублирует тест', () => {
+    const gates = gatesFor(byId(items, 'CI-01'), kit)
+    expect(gates).toContain('npm.cmd test')
+    expect(gates).toContain('node test/build-pack.mjs --check')
+    expect(gates).toContain('npm.cmd run check:backlog')
+    expect(gates).not.toContain('npm.cmd run retent:check')
+    expect(gates.filter((gate) => gate.startsWith('npm.cmd test')).length).toBe(1)
+  })
+
+  it('включает retent:check, когда скрипт объявлен', () => {
+    const project = { ...kit, scripts: { ...kit.scripts, 'retent:check': 'node scripts/retention-gate.mjs' } }
+    expect(gatesFor(byId(items, 'CI-01'), project)).toContain('npm.cmd run retent:check')
+  })
+
+  it('без проекта ведёт себя как раньше: фильтра нет', () => {
+    expect(gatesFor(byId(items, 'QA-01'))).toContain('npx.cmd eslint <изменённые файлы>')
+  })
+
+  it('промпт называет проект карточки, а не чужой путь', () => {
+    const card = buildCard(byId(items, 'QA-01'), { ...kit, root: 'D:/project' })
+    expect(card).toContain('Работаем с проектом project в D:/project')
+    expect(card).not.toContain('SwiftMatch')
+  })
+})
+
 describe('buildCard', () => {
   const items = parseBacklog(FIXTURE)
 

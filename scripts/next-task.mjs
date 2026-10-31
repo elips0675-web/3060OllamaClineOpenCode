@@ -253,23 +253,45 @@ export function parseBacklog(text) {
   return dedupe(items)
 }
 
-export function gatesFor(item) {
+export function projectCommands(root = ROOT) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+    return {
+      root,
+      scripts: pkg.scripts || {},
+      deps: { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) },
+    }
+  } catch {
+    return { root, scripts: {}, deps: {} }
+  }
+}
+
+export function gatesFor(item, project = null) {
   const files = item.files.map((file) => file.path)
   const hasFront = files.some((file) => /^(src|e2e)\//u.test(file))
   const hasServer = files.some((file) => /^server\//u.test(file))
   const hasSql = files.some((file) => /^(database\/|.*\.sql$)/u.test(file))
   const hasDocs = files.some((file) => /^(docs\/|README\.md|AGENTS\.md|project-context\.md)/u.test(file))
+  const hasScript = (name) => !project || Boolean(project.scripts[name])
+  const hasDep = (name) => !project || Boolean(project.deps[name])
+  const hasPack = !project || fs.existsSync(path.join(project.root || ROOT, 'test/build-pack.mjs'))
   const gates = []
-  if (hasFront) {
-    gates.push('npx.cmd eslint <изменённые файлы>')
-    gates.push('npm.cmd run typecheck')
-    gates.push('npm.cmd test -- <тест затронутого файла>')
+  const push = (gate) => {
+    if (!gates.includes(gate)) gates.push(gate)
   }
-  if (hasServer) gates.push('npm.cmd run check:n-plus-one')
-  if (hasSql) gates.push('npm.cmd run check:enum-constraints')
-  if (hasDocs) gates.push('npm.cmd run check:docs')
-  gates.push('npm.cmd run retent:check')
-  return gates.slice(0, 5)
+  if (hasFront) {
+    if (hasDep('eslint')) push('npx.cmd eslint <изменённые файлы>')
+    if (hasScript('typecheck')) push('npm.cmd run typecheck')
+    if (hasScript('test')) push('npm.cmd test -- <тест затронутого файла>')
+  }
+  if (hasServer && hasScript('check:n-plus-one')) push('npm.cmd run check:n-plus-one')
+  if (hasSql && hasScript('check:enum-constraints')) push('npm.cmd run check:enum-constraints')
+  if (hasDocs && hasScript('check:docs')) push('npm.cmd run check:docs')
+  if (!hasFront && hasScript('test')) push('npm.cmd test')
+  if (hasPack) push('node test/build-pack.mjs --check')
+  if (hasScript('check:backlog')) push('npm.cmd run check:backlog')
+  if (hasScript('retent:check')) push('npm.cmd run retent:check')
+  return gates.slice(0, 6)
 }
 
 const EVIDENCE_SCORE = { 'file:line': 2, file: 1, none: 0 }
@@ -334,10 +356,10 @@ const STATUS_TEXT = {
   'no-evidence': 'нет цитаты кода (правило проекта)',
 }
 
-function buildPrompt(item, slice) {
-  const project = 'D:\\swiftmatch1bdnoutprodpart1'
+function buildPrompt(item, slice, project = null) {
+  const root = (project && project.root) || ROOT
   const lines = [
-    `Работаем с проектом SwiftMatch в ${project}.`,
+    `Работаем с проектом ${path.basename(root)} в ${root}.`,
     `Задача ${item.id} из файла "Что доделать.txt" (строка ${item.line}).`,
     '',
     'Текст задачи:',
@@ -356,7 +378,7 @@ function buildPrompt(item, slice) {
   lines.push('- сначала покажи план из 3-5 пунктов, правки вноси после моего "делай".')
   lines.push('')
   lines.push('Проверки после правки (все должны быть exit 0):')
-  gatesFor(item).forEach((gate) => lines.push(`- ${gate}`))
+  gatesFor(item, project).forEach((gate) => lines.push(`- ${gate}`))
   lines.push('')
   lines.push('В отчёте: список изменённых файлов, вывод проверок, что осталось непонятным.')
   return lines.join('\n')
@@ -424,7 +446,7 @@ export function routeFor(item) {
   }
 }
 
-export function buildCard(item) {
+export function buildCard(item, project = null) {
   const ordered = sortFilesForSlice(item.files)
   const slice = ordered.length ? ordered[0].path : ''
   const out = []
@@ -459,10 +481,10 @@ export function buildCard(item) {
     out.push('')
   }
   out.push('ГЕЙТЫ (все exit 0)')
-  gatesFor(item).forEach((gate, index) => out.push(`  ${index + 1}. ${gate}`))
+  gatesFor(item, project).forEach((gate, index) => out.push(`  ${index + 1}. ${gate}`))
   out.push('')
   out.push('ПРОМПТ ДЛЯ АГЕНТА (скопировать целиком)')
-  buildPrompt(item, slice).split('\n').forEach((line) => out.push(`  ${line}`))
+  buildPrompt(item, slice, project).split('\n').forEach((line) => out.push(`  ${line}`))
   out.push('')
   out.push('='.repeat(80))
   return out.join('\n')
@@ -609,7 +631,8 @@ function main() {
     process.exit(0)
   }
 
-  const payload = options.json ? JSON.stringify({ task, route: routeFor(task), gates: gatesFor(task), card: buildCard(task) }, null, 2) : buildCard(task)
+  const project = projectCommands()
+  const payload = options.json ? JSON.stringify({ task, route: routeFor(task), gates: gatesFor(task, project), card: buildCard(task, project) }, null, 2) : buildCard(task, project)
   if (options.out) {
     const outPath = path.resolve(ROOT, options.out)
     fs.mkdirSync(path.dirname(outPath), { recursive: true })

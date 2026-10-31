@@ -22,13 +22,19 @@
 
 ## Команды-заготовки (заменить на проектные)
 
+В комплекте работают эти:
+
 ```bat
-npx.cmd eslint <изменённый файл>
-npm.cmd run typecheck
-npm.cmd test -- <точечный тест>
-npm.cmd run check:docs
-npx.cmd vite build
+npm.cmd test
+npm.cmd run check:backlog
+node test/build-pack.mjs --check
 ```
+
+В проекте-образце (SwiftMatch) к ним добавляются `npx.cmd eslint <файл>`,
+`npm.cmd run typecheck`, `npm.cmd test -- <точечный тест>`, `npm.cmd run check:docs`,
+`npx.cmd vite build` — они ставятся вместе с проектом, в комплекте этих скриптов
+и инструментов нет. Проверять надо те, что есть в `package.json` проекта, а не
+список выше.
 
 ## Признаки «зелено»
 
