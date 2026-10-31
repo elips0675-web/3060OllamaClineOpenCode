@@ -7,10 +7,10 @@
 > `templates/agent-protocol.md`, `templates/workflows/`, `templates/few-shot.md`.
 >
 > Команды в п. 3, 4 и 7 относятся к тому проекту. В комплекте работают только:
-> `npm.cmd test`, `npm.cmd run check:backlog`, `node test/build-pack.mjs --check`
-> и `node scripts/next-task.mjs`. Скриптов `typecheck`, `check:docs`,
-> `check:n-plus-one`, `check:enum-constraints`, `check:prod-mock`, `check:mirrors`
-> и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
+> `npm.cmd test`, `npm.cmd run check:backlog`, `npm.cmd run retent:check`,
+> `node test/build-pack.mjs --check` и `node scripts/next-task.mjs`. Скриптов
+> `typecheck`, `check:docs`, `check:n-plus-one`, `check:enum-constraints`,
+> `check:prod-mock`, `check:mirrors` и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
 > `check:backlog`, `backlog:*`, `eval:*`, `init:project`, а `devDependencies` —
 > только `vitest`. Пропущенные команды в карточку задачи не попадают:
 > `gatesFor` (`scripts/next-task.mjs`) отбрасывает гейт, которого нет в

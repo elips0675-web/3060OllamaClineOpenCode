@@ -5,9 +5,9 @@
 Как читать: это «промптовая» часть комплекта. Если вопрос «почему агент ведёт себя так» — ответ здесь, а не в коде.
 
 Состав (26 файлов, порядок = порядок в файле):
-   1. .clinerules — 13371 байт, 168 строк
+   1. .clinerules — 13399 байт, 168 строк
    2. switch-ai.bat — 602 байт, 18 строк
-   3. package.json — 1439 байт, 30 строк
+   3. package.json — 1668 байт, 33 строк
    4. models/Modelfile-14b-q4 — 402 байт, 11 строк
    5. models/Modelfile-14b-q6 — 409 байт, 11 строк
    6. models/Modelfile-7b-q5 — 541 байт, 12 строк
@@ -37,7 +37,7 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: .clinerules  (13371 байт, 168 строк)
+ФАЙЛ: .clinerules  (13399 байт, 168 строк)
 ================================================================================
 
 # SwiftMatch — жёсткие правила для ИИ-агента (Cline / Roo Code)
@@ -49,10 +49,10 @@
 > `templates/agent-protocol.md`, `templates/workflows/`, `templates/few-shot.md`.
 >
 > Команды в п. 3, 4 и 7 относятся к тому проекту. В комплекте работают только:
-> `npm.cmd test`, `npm.cmd run check:backlog`, `node test/build-pack.mjs --check`
-> и `node scripts/next-task.mjs`. Скриптов `typecheck`, `check:docs`,
-> `check:n-plus-one`, `check:enum-constraints`, `check:prod-mock`, `check:mirrors`
-> и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
+> `npm.cmd test`, `npm.cmd run check:backlog`, `npm.cmd run retent:check`,
+> `node test/build-pack.mjs --check` и `node scripts/next-task.mjs`. Скриптов
+> `typecheck`, `check:docs`, `check:n-plus-one`, `check:enum-constraints`,
+> `check:prod-mock`, `check:mirrors` и инструментов `eslint`/`vite` в нём нет: `package.json` объявляет `test*`,
 > `check:backlog`, `backlog:*`, `eval:*`, `init:project`, а `devDependencies` —
 > только `vitest`. Пропущенные команды в карточку задачи не попадают:
 > `gatesFor` (`scripts/next-task.mjs`) отбрасывает гейт, которого нет в
@@ -231,7 +231,7 @@ node --no-warnings "%SCRIPT%" %*
 endlocal
 
 ================================================================================
-ФАЙЛ: package.json  (1439 байт, 30 строк)
+ФАЙЛ: package.json  (1668 байт, 33 строк)
 ================================================================================
 
 {
@@ -241,7 +241,8 @@ endlocal
   "type": "module",
   "description": "Offline coding-agent kit for RTX 3060: task selection, local/cloud switching and route (snapshot of SwiftMatch scripts)",
   "scripts": {
-    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs",
+    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs",
+    "test:retent": "vitest run scripts/retention-gate.test.mjs",
     "test:next": "vitest run scripts/next-task.test.mjs",
     "test:ai": "vitest run scripts/ai-profile.test.mjs",
     "test:brief": "vitest run scripts/project-brief.test.mjs",
@@ -251,6 +252,8 @@ endlocal
     "test:init": "vitest run scripts/init-project.test.mjs",
     "init:project": "node scripts/init-project.mjs",
     "check:backlog": "node scripts/backlog.mjs check",
+    "retent:check": "node scripts/retention-gate.mjs",
+    "retent:check:preflight": "node scripts/retention-gate.mjs --preflight",
     "backlog:open": "node scripts/backlog.mjs open",
     "backlog:close": "node scripts/backlog.mjs close",
     "eval:list": "node scripts/agent-eval.mjs list",
