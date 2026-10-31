@@ -2,6 +2,49 @@
 Дата среза: 30.10.2026. Новые записи — сверху.
 
 ================================================================================
+31.10.2026. ПЕРЕНОСИМОСТЬ: УСТАНОВЩИК, CLINE SETUP, OPENCLOSE
+================================================================================
+
+Сделано:
+
+- `scripts/init-project.mjs` — установщик правил, workflows, `cline_docs` и
+  docs в любой проект. Флаги: `--dry-run`, `--force`, `--force-memory`,
+  `--convert-rules`, `--no-workflows`, `--no-memory`, `--no-docs`.
+  Идемпотентность: совпадающие файлы не трогаются; `cline_docs` не
+  перезаписывается без `--force-memory`; паспорт `00-project.md` — никогда.
+- `scripts/init-project.test.mjs` — 17 тестов; `npm.cmd run test:init`.
+- `templates/few-shot.md` — 3 примера; `templates/rules/00-project.md` —
+  паспорт проекта; `templates/workflows/deep-planning.md` — план до правок;
+  в `templates/agent-protocol.md` добавлен Confidence Check 0–10.
+- `docs/AGENTS-cline-setup.md` — Compact Prompt, max tokens 2048–4096,
+  temperature 0.1–0.3, stop sequences, Memory Bank.
+- `docs/AGENTS-openclose-experiment.md` — установка OpenClose, патч
+  text-JSON fallback, результаты E-01/E-02/E-07.
+- Исправлены ложные утверждения про готовые `.opencode/commands/next*.md`
+  в `01`, `08`, `README`: каталога `.opencode` нет, `/next` в OpenCode
+  создаётся вручную.
+- `README.md` и `00-ЧИТАЙ-ПЕРВЫМ.txt` переведены на установщик вместо
+  ручного копирования `.clinerules`.
+
+Проверено:
+
+- `npm.cmd test` — **200/200** (7 файлов).
+- `init-project --root "E:\Tickets Cursor nout\repo" --dry-run` — 14 файлов
+  будет создано, 6 существуют и не перезаписываются.
+- OpenClose установлен в `E:\openclose` (Python 3.12.16 + uv 0.13.6),
+  подключён к Ollama `http://127.0.0.1:11434/v1`, модель
+  `qwen2.5-coder-16k:latest`. Все проверенные локальные модели отдают
+  `tool_calls: null`; без патча `agent/loop.py` OpenClose не вызывает
+  инструменты. E-01/E-02/E-07 на OpenClose — FAIL.
+
+Не проверено:
+
+- AGT-02: ручной прогон 10 задач в Cline (нужен GUI и человек).
+- Полный 7-задачный срез после правок E-02/E-07 не перезапущен.
+- OpenClose не прогнан через `agent-live --rescore`; числа по одной
+  методике пока не сведены.
+
+================================================================================
 30.10.2026. ПОЛНЫЙ СРЕЗ 7 ЗАДАЧ И ЛОЖНЫЙ PASS E-02
 ================================================================================
 

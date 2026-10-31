@@ -112,7 +112,8 @@
 6. КУДА ВВОДИТЬ (кратко)
 
   cmd, корень проекта   npm.cmd run task:next -- --local     только карточка
-  OpenCode              /next, /next-cloud, /next QA-01
+  OpenCode              /next, /next-cloud, /next QA-01 — только если файлы
+                        команд созданы вручную (в комплект не входят)
   Cline                 написать: Доделай из Что доделать
   VS Code               Ctrl+Shift+B -> «Следующая задача»
   Continue              ничего, Tab принимает подсказку
@@ -128,11 +129,15 @@
     строка «Маршрут» в карточке: local/cloud по цитате file:line и риск-домену
     (деньги, доступ и секреты, схема БД, инфраструктура); локально — один
     файл за подход, а не «сколько файлов в пункте»;
-    .opencode/commands/next.md и next-cloud.md (команды /next, /next-cloud);
     .vscode/tasks.json — 7 задач, Ctrl+Shift+B;
     .clinerules — правила для Cline, включая фразу-триггер;
     комплект: 00-12, 5 Modelfile, workspace, .clinerules (копия проектного),
     scripts/ (снимок селектора + тесты), package.json, README.
+
+  Не создано в проекте:
+    .opencode/commands/next.md и next-cloud.md — каталога .opencode нет ни
+    в проекте, ни в комплекте; /next в OpenCode надо создать вручную
+    (08, раздел 3.3), а в Cline работает триггер «Доделай из Что доделать».
 
   Не готово на машине без GPU/моделей (например на ноутбуке):
     в Ollama 0 моделей -> /next физически идёт в облако;
@@ -148,7 +153,8 @@
     3) закрыть VS Code и из корня проекта выполнить switch-ai.bat local
        (или local-q5, cloud): скрипт сам пропишет opencode.json и Cline
        (12-Переключение-моделей.txt). Ручной путь — блок 3.2 файла 08;
-    4) при желании добавить в команды /next и /next-cloud строки agent и model;
+    4) если создадите команды /next и /next-cloud, добавьте в них строки
+       agent и model (08, раздел 3.6);
     5) проверить: npm.cmd run task:next -- --local, затем /next.
 
 
@@ -197,9 +203,9 @@
 
   9.3 OPENCODE
 
-  /next не появилась                 есть ли .opencode/commands/next.md
-                                     (в TUI команд /reload нет: перезапустите
-                                     opencode — команды читаются при старте)
+  /next не появилась                 команда не входит в комплект: создайте
+                                     .opencode/commands/next.md (08, 3.3)
+                                     и перезапустите opencode
   Конфиг не применился               JSON сломан (запятая, кавычка): проверить
                                      синтаксис и перезапустить opencode
   Сессия падает или модель           в opencode.json прописана модель,

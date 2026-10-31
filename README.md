@@ -32,9 +32,13 @@
 | `templates/analysis-card.md` | шаблон итога анализа: факты, риски, «не проверено» |
 | `templates/analysis-rules.md` | блок правил для проектного `.clinerules` |
 | `templates/agent-protocol.md` | агентный цикл, бюджет шагов, стоп-правила, формат ответа |
+| `templates/few-shot.md` | 3 примера: факт с `file:line`, поиск, честное «не найдено» |
+| `templates/rules/00-project.md` | паспорт проекта: стек, команды, риск-домены |
 | `templates/verify-checklist.md` | проверка до/после правки и команды-заготовки |
-| `templates/workflows/*.md` | 6 процедур для `.clinerules/workflows/` |
+| `templates/workflows/*.md` | 7 процедур для `.clinerules/workflows/` |
 | `templates/cline_docs/*.md` | Memory Bank: 5 файлов для `cline_docs/` проекта |
+| `docs/AGENTS-cline-setup.md` | Compact Prompt, лимиты, temperature, Confidence Check |
+| `docs/AGENTS-workflow.md` | механика «Что сделано ↔ Что доделать», чекпойнт, гейт |
 | `evals/tasks.json` | 10 задач с бинарным критерием и ожидаемым маршрутом |
 | `evals/manual-run.md` | лист ручного прогона 10 задач в Cline: подготовка, проверка, запись |
 | `models/Modelfile-*` | свои сборки под 12 ГБ: 14B q4/q6, 7B q8/q5_K_M, 1.5B |
@@ -48,10 +52,12 @@
 | `scripts/project-brief.test.mjs` | 19 тестов сборщика: обход, классификация, CLI |
 | `scripts/backlog.mjs` | механизм бэклога: ID, статусы, close/open, сверка с журналом |
 | `scripts/backlog.test.mjs` | 19 тестов механизма: канон, «надгробия», даты, CLI |
+| `scripts/init-project.mjs` | установщик правил, workflows и `cline_docs` в любой проект |
+| `scripts/init-project.test.mjs` | 17 тестов установщика: dry-run, конфликты, идемпотентность |
 | `scripts/agent-eval.mjs` | эвалы агента: список задач, запись прогонов, счёт |
 | `scripts/agent-eval.test.mjs` | 23 теста эвалов: промпты, порог, последний прогон, CLI |
 | `scripts/agent-live.mjs` | живой прогон локальной моделью: инструменты, цитаты, отчёт |
-| `scripts/agent-live.test.mjs` | 48 тестов прогона: цитаты, инструменты, вердикт, бюджет промпта |
+| `scripts/agent-live.test.mjs` | 49 тестов прогона: цитаты, инструменты, вердикт, бюджет промпта |
 | `package.json` | скрипты тестов и гейтов бэклога (`vitest`, `check:backlog`) |
 | `swiftmatch-3060.code-workspace` | рабочее пространство VS Code |
 | `Что сделано.txt` / `Что доделать.txt` | журнал и открытые пункты комплекта |
@@ -62,12 +68,40 @@
    желании `[4]` для автодополнения и `[5]` для лёгкой 7B q5_K_M).
 2. `ollama list` — проверить, что модели на месте.
 3. В OpenCode: `/models` — узнать точный ID локальной сборки (обычно `ollama/<имя>:latest`).
-4. Только после этого вписать `model:` в шапку `.opencode/commands/next.md`.
+4. (необязательно) Если нужен `/next` в OpenCode — создайте
+   `.opencode/commands/next.md` по `08`, раздел 3.3. В комплект эти команды
+   не входят: каталога `.opencode` здесь нет.
 5. `03-Замер-скорости.bat` — убедиться, что модель целиком на GPU.
 6. Из корня проекта: `"…\switch-ai.bat" status`, затем `local` (или `cloud`).
    Перед профилем Cline закройте VS Code; в OpenCode выберите модель в `/models`
    или начните новую сессию.
 7. Дальше — `00-ЧИТАЙ-ПЕРВЫМ.txt` и `09-Памятка.txt`.
+
+## Перенос в другой проект
+
+Установщик копирует в проект правила, workflows, Memory Bank и настройки Cline:
+
+```bat
+node "E:\3060OllamaClineOpenCode-main\scripts\init-project.mjs" --root "D:\проект" --dry-run
+node "E:\3060OllamaClineOpenCode-main\scripts\init-project.mjs" --root "D:\проект"
+```
+
+Что появится в проекте:
+
+```text
+.clinerules/00-project.md       паспорт: стек, команды, риск-домены
+.clinerules/40-agent-cycle.md   цикл RESTATE → … → REPORT
+.clinerules/50-few-shot.md      примеры правильного ответа
+.clinerules/workflows/*.md      7 процедур, включая deep-planning
+cline_docs/*.md                 Memory Bank
+docs/AGENTS-cline-setup.md      настройки Cline под 14B
+docs/AGENTS-verify-checklist.md проверка до/после правки
+```
+
+Повторный запуск идемпотентен: совпадающие файлы не трогаются, отличающиеся —
+только с `--force`; `cline_docs/` не перезаписывается без `--force-memory`.
+Если `.clinerules` в проекте — файл, запустите с `--convert-rules`: старые
+правила сохранятся как `.clinerules/00-project-rules.md`.
 
 ## Переключение «локально ↔ облако»
 
@@ -163,7 +197,8 @@ RESTATE → MAP → PLAN → ACT → VERIFY → REPORT
 ```
 
 Правила держатся короткими: 14B теряет длинный системный текст. Всё длинное —
-в workflows.
+в workflows. Перед первым инструментом — Confidence Check 0–10: ниже 7 —
+вопрос, а не правка. Примеры правильного ответа — `templates/few-shot.md`.
 
 **2. Workflows** — `templates/workflows/`, копируются в
 `.clinerules/workflows/` проекта и вызываются как `/brief.md`, `/fix.md`:
@@ -175,6 +210,7 @@ RESTATE → MAP → PLAN → ACT → VERIFY → REPORT
 | `test.md` | закрепить существующее поведение | один тест в стиле проекта |
 | `review.md` | готовый diff | блокер / желательно / вопрос, каждый с цитатой |
 | `refactor.md` | упростить без смены поведения | тесты до/после, один файл |
+| `deep-planning.md` | > 1 файла, неясная причина, риск-домен | `implementation_plan.md` до правок |
 | `eval.md` | после правки правил/промптов/модели | число pass, дельта, что чинить |
 
 **3. Память** — `templates/cline_docs/` (Memory Bank). Копируется в
@@ -243,7 +279,7 @@ node scripts/next-task.mjs --id AI-02 --route
 ```
 
 Тесты (51 у селектора + 22 у переключателя + 19 у сборщика + 19 у бэклога +
-23 у эвалов + 48 у живого прогона = 182) запускаются здесь же:
+23 у эвалов + 49 у живого прогона + 17 у установщика = 200) запускаются здесь же:
 
 ```
 npm.cmd install
@@ -253,6 +289,7 @@ npm.cmd run test:brief
 npm.cmd run test:backlog
 npm.cmd run test:eval
 npm.cmd run test:live
+npm.cmd run test:init
 npm.cmd run test
 ```
 

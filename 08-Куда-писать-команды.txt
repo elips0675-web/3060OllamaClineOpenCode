@@ -312,7 +312,8 @@
         /next-cloud        по приоритетам бэклога (для облака)
         /next QA-01        конкретный пункт
       Файлы команд: .opencode/commands/next.md и next-cloud.md.
-      В git они не добавлены — лежат в рабочем дереве.
+      В комплект и в проект они НЕ входят: каталога .opencode нет.
+      Создайте вручную по п.3.3; без файлов /next отвечает «команда не найдена».
       Модель эти команды не выбирают (строки model в них нет): её берёт
       сессия. Жёсткий маршрут «/next = 3060, /next-cloud = облако» —
       одна строка model в шапке файла, см. п.3.6.
@@ -340,9 +341,9 @@
       4) показывает план 3-5 пунктов, ждёт «делай»;
       5) правит один файл, гоняет гейты, отчитывается.
 
-  Важно про 3060: команды /next и /next-cloud сейчас без полей agent/model —
-  работают на той модели, что выбрана в сессии. После установки моделей Ollama
-  добавьте в frontmatter две строки:
+  Важно про 3060: если создадите команды /next и /next-cloud по п.3.3, без
+  полей agent/model они работают на той модели, что выбрана в сессии.
+  После установки моделей Ollama добавьте в frontmatter две строки:
       /next:        agent: local     model: ollama/swiftmatch-coder-14b:latest
       /next-cloud:  agent: cloud     model: opencode/deepseek-v4.1-flash-free
 
@@ -359,7 +360,9 @@
    6) ollama list -> есть swiftmatch-coder-14b и swiftmatch-coder-tiny.
    7) VS Code + расширения (Cline, Continue, ESLint, Tailwind).
    8) Открыть swiftmatch-3060.code-workspace.
-   9) Скопировать .clinerules в корень проекта.
+   9) Установить правила и память в проект:
+      node "D:\ИИ агент\3060 16 gb\scripts\init-project.mjs" --root . --dry-run
+      затем без --dry-run. Скрипт создаст .clinerules, workflows и cline_docs.
   10) Вместо ручной вставки блока 3.2 и файлов 3.3: закрыть VS Code, из корня
       проекта выполнить switch-ai.bat local (или local-q5) — скрипт сам
       смержит opencode.json и настроит Cline (см. 12-Переключение-моделей.txt).

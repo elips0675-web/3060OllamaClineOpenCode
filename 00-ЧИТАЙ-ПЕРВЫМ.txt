@@ -29,9 +29,13 @@ models\Modelfile-tiny            профиль D: 1.5B, автодополне�
 templates\analysis-card.md       шаблон итога анализа (факты + file:line)
 templates\analysis-rules.md      блок правил для проектного .clinerules
 templates\agent-protocol.md      цикл шага, бюджет, стоп-правила для .clinerules
+templates\few-shot.md            3 примера: факт с file:line, поиск, «не найдено»
+templates\rules\00-project.md    паспорт проекта: стек, команды, риск-домены
 templates\verify-checklist.md    проверка до/после правки
-templates\workflows\             6 процедур для .clinerules/workflows
+templates\workflows\             7 процедур для .clinerules/workflows
 templates\cline_docs\            Memory Bank проекта (5 файлов)
+docs\AGENTS-workflow.md          механика журналов, чекпойнт, гейт
+docs\AGENTS-cline-setup.md       Compact Prompt, лимиты 14B, Confidence Check
 evals\tasks.json                 10 задач с бинарным критерием
 evals\README.md                  как гонять эвалы и что считается провалом
 evals\manual-run.md              лист ручного прогона 10 задач в Cline
@@ -44,10 +48,12 @@ scripts\project-brief.mjs        сборщик фактов о проекте (
 scripts\project-brief.test.mjs   19 тестов сборщика (vitest)
 scripts\backlog.mjs              механизм бэклога: ID, close/open, сверка с журналом
 scripts\backlog.test.mjs         19 тестов механизма бэклога (vitest)
+scripts\init-project.mjs         установщик правил, workflows и cline_docs в проект
+scripts\init-project.test.mjs    17 тестов установщика (vitest)
 scripts\agent-eval.mjs           эвалы: список задач, запись, счёт, порог
 scripts\agent-eval.test.mjs      23 теста эвалов (vitest)
 scripts\agent-live.mjs           живой прогон локальной моделью (read-only)
-scripts\agent-live.test.mjs      48 тестов прогона (vitest)
+scripts\agent-live.test.mjs      49 тестов прогона (vitest)
 package.json                     команды тестов и гейтов бэклога
 README.md                        краткое описание репозитория на GitHub
 swiftmatch-3060.code-workspace   рабочее пространство VS Code + настройки
@@ -135,8 +141,10 @@ swiftmatch-3060.code-workspace   рабочее пространство VS Code
 6. Откройте swiftmatch-3060.code-workspace (двойной клик).
    В нём уже: терминал = Command Prompt, исключены node_modules/dist, указан TS SDK.
 
-7. Скопируйте .clinerules в корень проекта SwiftMatch (рядом с AGENTS.md).
-   Cline читает его при каждом запросе и не даёт агенту нарушать правила проекта.
+7. Установите правила и память в проект:
+   node "D:\ИИ агент\3060 16 gb\scripts\init-project.mjs" --root . --dry-run
+   затем без --dry-run. Появятся .clinerules/ (паспорт, цикл, примеры,
+   workflows) и cline_docs/ (Memory Bank). Настройки Cline — docs\AGENTS-cline-setup.md.
 
 8. Настройте Cline: провайдер Ollama, Base URL http://localhost:11434,
    Model ID = swiftmatch-coder-14b, Context Window 12288 (профиль A) или
@@ -174,8 +182,8 @@ swiftmatch-3060.code-workspace   рабочее пространство VS Code
         npm.cmd run backlog:close -- --id BLK-01 --ref "раздел «BLK-01»"
     Правила — в конце «Что доделать.txt».
 
-14. Агентный контур: протокол шага (templates/agent-protocol.md) копируется в
-    проектный .clinerules, workflows — в .clinerules/workflows, Memory Bank — в
+14. Агентный контур: установщик копирует протокол шага в .clinerules/40-agent-cycle.md,
+    примеры — в 50-few-shot.md, workflows — в .clinerules/workflows, Memory Bank — в
     cline_docs. После каждой правки правил снимайте балл на 10 задачах:
         npm.cmd run eval:list
         npm.cmd run eval:prompt -- --id E-01
@@ -220,10 +228,11 @@ swiftmatch-3060.code-workspace   рабочее пространство VS Code
 2. На домашнем ПК проверьте пути: если проект лежит не в
    D:\swiftmatch1bdnoutprodpart1, поправьте "path" в swiftmatch-3060.code-workspace
    и путь в docs.url файла 06-Continue-автодополнение.yaml.
-3. Перенесите .clinerules в корень проекта (рядом с AGENTS.md).
-   В комплекте он — копия проектного (синхронизирован 30.10.2026, 8569 байт):
-   придумывать заново не нужно, и правки тоже делаются в проекте, а сюда
-   переносится копия.
+3. Правила в проект ставятся установщиком:
+   node "D:\ИИ агент\3060 16 gb\scripts\init-project.mjs" --root . --dry-run
+   затем без --dry-run. Если .clinerules уже есть, существующие файлы не
+   перезаписываются; для старого .clinerules-файла — флаг --convert-rules.
+   Правки правил делаются в проекте, в комплект переносится копия/шаблон.
 4. Модели НЕ переносятся вместе с папкой: их либо скачивает
    02-Установить-локально.bat на месте, либо копируется папка
    %USERPROFILE%\.ollama\models (только если переносите на такой же Ollama).
