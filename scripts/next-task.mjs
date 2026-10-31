@@ -12,6 +12,7 @@ const BLOCKED_ID = [/^(ENV|AND|LEGAL|CI)-\d{2}$/u]
 const OWNER_BLOCK = /решение владельца|зависит от владельца|ждёт владельца|ждет владельца|живыми ключами|живой прогон с ключами|после ENV-0\d/iu
 const CLOSED_ITEM = /закрыт\s+Stage|закрыт\s+\d{2}\.\d{2}\.\d{4}|\(закрыт|✅\s*\d{2}\.\d{2}\.\d{4}/iu
 const ACCEPTED_DECISION = /риск принят|решено оставить|решение зафиксировано|осознанное ограничение/iu
+const WATCH_ITEM = /\(watch\b|не делать сейчас/iu
 
 const ITEM_ID = /\b([A-Z][A-Z0-9]{1,7}-\d{2})\b/u
 const PATH_TOKEN = /`([A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:tsx?|jsx?|mjs|cjs|sql|md|json|ya?ml|css|ps1|bat|conf))(?::(\d+(?:[-,]\d+)*))?`/gu
@@ -107,6 +108,7 @@ export function statusOf(item) {
   if (item.blocked || OWNER_BLOCK.test(text)) return 'blocked'
   if (CLOSED_ITEM.test(text)) return 'closed'
   if (ACCEPTED_DECISION.test(text)) return 'decision'
+  if (WATCH_ITEM.test(text)) return 'watch'
   if (item.evidence === 'none') return 'no-evidence'
   return 'ready'
 }
@@ -275,7 +277,7 @@ const EVIDENCE_SCORE = { 'file:line': 2, file: 1, none: 0 }
 export function pickTask(items, options = {}) {
   const pool = items
     .filter((item) => item.status !== 'closed' && item.status !== 'decision')
-    .filter((item) => (options.includeBlocked ? true : item.status !== 'blocked'))
+    .filter((item) => (options.includeBlocked ? true : item.status !== 'blocked' && item.status !== 'watch'))
     .filter((item) => (options.queueOnly ? item.queue : true))
     .filter((item) => (options.allowNoEvidence ? true : item.status !== 'no-evidence'))
     .filter((item) => (options.local ? item.status === 'ready' && routeFor(item).target === 'local' : true))
@@ -326,6 +328,7 @@ function sortFilesForSlice(files) {
 const STATUS_TEXT = {
   ready: 'готова',
   blocked: 'заблокирована владельцем',
+  watch: 'отложена (watch: не делать сейчас)',
   closed: 'уже закрыта',
   decision: 'принятое решение, не задача',
   'no-evidence': 'нет цитаты кода (правило проекта)',
@@ -495,8 +498,8 @@ function printHelp() {
     '  node scripts/next-task.mjs --out tmp/next-task.txt  сохранить карточку в файл',
     '  node scripts/next-task.mjs --backlog <путь>      другой файл бэклога',
     '',
-    'Статусы: ready (брать), blocked (владелец/ключи), closed (закрыт),',
-    '         decision (принятое решение), no-evidence (нет file:line).',
+    'Статусы: ready (брать), blocked (владелец/ключи), watch (не делать сейчас),',
+    '         closed (закрыт), decision (принятое решение), no-evidence (нет file:line).',
     'Exit: 0 — задача найдена, 1 — брать нечего, 2 — ошибка аргументов.',
     '',
   ].join('\n'))

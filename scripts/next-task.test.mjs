@@ -477,3 +477,42 @@ describe('readBacklogFile', () => {
     expect(result.error.message).toBe('нет кода')
   })
 })
+
+describe('watch-пункты', () => {
+  const TEXT = [
+    '# Что доделать — бэклог',
+    '',
+    '## 🟡 Агентные проверки (P2)',
+    '',
+    '### AGT-11 — Отложенная правка',
+    'Факт: `scripts/next-task.mjs` не знает про watch.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026) (watch: после AGT-02)',
+    '',
+    '### AGT-12 — Готовая правка',
+    'Факт: `scripts/next-task.mjs` ждёт правки.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026)',
+    '',
+  ].join('\n')
+
+  it('помечает пункт со статусом watch, а не ready', () => {
+    const items = parseBacklog(TEXT)
+    const byId = (id) => items.find((item) => item.id === id)
+    expect(byId('AGT-11').status).toBe('watch')
+    expect(byId('AGT-12').status).toBe('ready')
+  })
+
+  it('не отдаёт watch-пункт по умолчанию, но отдаёт с --include-blocked', () => {
+    const items = parseBacklog(TEXT)
+    expect(pickTask(items).id).toBe('AGT-12')
+    expect(pickTask(items, { id: 'AGT-11' })).toBe(null)
+    expect(pickTask(items, { id: 'AGT-11', includeBlocked: true }).id).toBe('AGT-11')
+  })
+
+  it('не отдаёт watch-пункт и в локальный маршрут', () => {
+    const items = parseBacklog(TEXT)
+    expect(pickTask(items, { local: true, id: 'AGT-11' })).toBe(null)
+    expect(pickTask(items, { local: true, id: 'AGT-11', includeBlocked: true })).toBe(null)
+  })
+})
