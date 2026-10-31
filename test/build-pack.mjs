@@ -66,6 +66,7 @@ const DOCS_DETAIL = [
   'docs/AGENTS-cline-setup.md',
   'docs/AGENTS-workflow.md',
   'docs/AGENTS-production.md',
+  'docs/AGENTS-pitfalls.md',
   'docs/AGENTS-kaggle-runbook.md',
   'docs/AGENTS-openclose-experiment.md',
   'docs/AGENTS-remote-eval.md',

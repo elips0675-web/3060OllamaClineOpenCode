@@ -40,6 +40,7 @@
 | `docs/AGENTS-cline-setup.md` | Compact Prompt, лимиты, temperature, Confidence Check |
 | `docs/AGENTS-workflow.md` | механика «Что сделано ↔ Что доделать», чекпойнт, гейт |
 | `docs/AGENTS-production.md` | что значит «готово»: «создано ↔ доказано», pre-flight из 5 пунктов |
+| `docs/AGENTS-pitfalls.md` | реестр граблей комплекта: 18 пунктов, формат «симптом → причина → фикс → как поймать → класс» |
 | `evals/tasks.json` | 10 задач с бинарным критерием и ожидаемым маршрутом |
 | `evals/manual-run.md` | лист ручного прогона 10 задач в Cline: подготовка, проверка, запись |
 | `models/Modelfile-*` | свои сборки под 12 ГБ: 14B q4/q6, 7B q8/q5_K_M, 1.5B |
