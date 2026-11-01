@@ -26,6 +26,15 @@ export const THRESHOLDS = {
   maxAvgSteps: 6,
 }
 
+// Причина провала — код, а не свободный текст: по нему видно, что чинить.
+export const FAIL_REASONS = {
+  hallucinated_file: 'выдуманный файл',
+  hallucinated_line: 'выдуманная строка',
+  gave_up_prematurely: 'сдался раньше',
+  ignored_constraint: 'нарушил ограничение',
+  other: 'другое',
+}
+
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'))
 
 export function loadTasks(file = DEFAULT_TASKS) {
@@ -61,7 +70,11 @@ export function validateRun(run, tasks) {
   if (typeof run.pass !== 'boolean') throw new Error('нужен ровно один из флагов --pass / --fail')
   if (!isCount(run.steps)) throw new Error('--steps требует целое ≥ 0')
   if (!isCount(run.fabricated)) throw new Error('--fabricated требует целое ≥ 0')
-  return { ...run, note: String(run.note || '').trim() }
+  const reason = run.pass ? '' : String(run.reason || '').trim()
+  if (reason && !Object.hasOwn(FAIL_REASONS, reason)) {
+    throw new Error(`--reason: ${reason}; допустимо: ${Object.keys(FAIL_REASONS).join(', ')}`)
+  }
+  return { ...run, note: String(run.note || '').trim(), reason }
 }
 
 export function recordRun(data, run, tasks) {
@@ -84,6 +97,7 @@ export function scoreRuns(data, tasks) {
       steps: last ? last.steps : null,
       fabricated: last ? last.fabricated : null,
       note: last ? last.note : '',
+      reason: last ? last.reason || '' : '',
       at: last ? last.at : '',
     }
   })
@@ -137,6 +151,7 @@ export function formatScore(score) {
         `${verdict.padEnd(5)} ${String(row.steps ?? '—').padStart(4)}  ${String(row.fabricated ?? '—').padStart(9)}`,
     )
     if (row.note) lines.push(`      … ${row.note}`)
+    if (!row.pass && row.reason) lines.push(`      ! ${row.reason} — ${FAIL_REASONS[row.reason] || row.reason}`)
   }
   lines.push('')
   lines.push(
@@ -177,11 +192,12 @@ function usage() {
 
   node scripts/agent-eval.mjs list [--tasks <файл>]
   node scripts/agent-eval.mjs prompt --id E-01 [--tasks <файл>]
-  node scripts/agent-eval.mjs record --id E-01 (--pass|--fail) [--steps N] [--fabricated N] [--note "..."] [--results <файл>]
+  node scripts/agent-eval.mjs record --id E-01 (--pass|--fail) [--steps N] [--fabricated N] [--reason код] [--note "..."] [--results <файл>]
   node scripts/agent-eval.mjs score [--strict] [--tasks <файл>] [--results <файл>]
 
   --steps       сколько шагов/правок сделал агент
   --fabricated  сколько несуществующих файлов/функций/полей назвал
+  --reason      причина fail: ${Object.keys(FAIL_REASONS).join(' | ')}
   --strict      exit 1, если порог не достигнут
 `
 }
@@ -261,6 +277,7 @@ function main(argv) {
           pass: args.flags.has('pass'),
           steps: value('steps'),
           fabricated: value('fabricated'),
+          reason: args.values.reason || '',
           note: args.values.note || '',
         },
         tasks,

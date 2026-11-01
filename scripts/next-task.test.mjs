@@ -556,3 +556,71 @@ describe('watch-пункты', () => {
     expect(pickTask(items, { local: true, id: 'AGT-11', includeBlocked: true })).toBe(null)
   })
 })
+
+describe('явные маркеры статуса', () => {
+  const TEXT = [
+    '# Что доделать — бэклог',
+    '',
+    '## 🟡 Агентные проверки (P2)',
+    '',
+    '### BLK-06 — Ждёт сборки',
+    'Факт: `scripts/next-task.mjs` не разбирает маркер.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026) (blocked: проверка после BLK-01)',
+    '',
+    '### RUN-06 — Выбор владельца',
+    'Факт: `scripts/next-task.mjs` не разбирает решение.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026) (decision)',
+    '',
+    '### AGT-20 — Упоминание в цитате',
+    'Факт: в тексте есть `решение владельца` как пример, но это не блокер — `scripts/next-task.mjs:12`.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026)',
+    '',
+  ].join('\n')
+
+  it('маркер (blocked: …) даёт blocked, а не no-evidence', () => {
+    const item = parseBacklog(TEXT).find((row) => row.id === 'BLK-06')
+    expect(item.status).toBe('blocked')
+  })
+
+  it('маркер (decision) даёт decision, а не ready', () => {
+    const item = parseBacklog(TEXT).find((row) => row.id === 'RUN-06')
+    expect(item.status).toBe('decision')
+  })
+
+  it('фраза в обратных кавычках не делает пункт blocked', () => {
+    const item = parseBacklog(TEXT).find((row) => row.id === 'AGT-20')
+    expect(item.status).toBe('ready')
+  })
+})
+
+describe('цитаты документов и имена без расширения', () => {
+  it('принимает .txt, .prisma, .toml и .ini как file:line', () => {
+    const files = extractFiles(
+      '`08-Куда-писать-команды.txt:262`, `server/prisma/schema.prisma:63`, `pyproject.toml:4`, `setup.ini:2`',
+    )
+    expect(files).toEqual([
+      { path: '08-Куда-писать-команды.txt', lines: '262' },
+      { path: 'server/prisma/schema.prisma', lines: '63' },
+      { path: 'pyproject.toml', lines: '4' },
+      { path: 'setup.ini', lines: '2' },
+    ])
+  })
+
+  it('принимает имя без расширения, если файл есть в инвентаре', () => {
+    const inventory = ['models/Modelfile-14b-q4', '.clinerules', 'scripts/next-task.mjs']
+    expect(extractFiles('`models/Modelfile-14b-q4`', inventory)).toEqual([
+      { path: 'models/Modelfile-14b-q4', lines: '' },
+    ])
+    expect(extractFiles('`.clinerules:5`', inventory)).toEqual([
+      { path: '.clinerules', lines: '5' },
+    ])
+  })
+
+  it('не принимает имя без расширения, которого нет в инвентаре', () => {
+    expect(extractFiles('`models/Modelfile-14b-q4`')).toEqual([])
+    expect(extractFiles('`models/Modelfile-14b-q4`', ['scripts/next-task.mjs'])).toEqual([])
+  })
+})

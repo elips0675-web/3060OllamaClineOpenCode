@@ -74,6 +74,17 @@ describe('запись прогона', () => {
     expect(next.runs[0].note).toBe('ок')
     expect(next.runs[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
+
+  it('типизирует причину провала и чистит её у pass', () => {
+    const failed = validateRun({ ...run('E-01', false, 7), reason: 'gave_up_prematurely' }, TASKS)
+    expect(failed.reason).toBe('gave_up_prematurely')
+    expect(() => validateRun({ ...run('E-01', false, 7), reason: 'придумал' }, TASKS)).toThrow(
+      /--reason/,
+    )
+    const passed = validateRun({ ...run('E-01', true, 3), reason: 'hallucinated_file' }, TASKS)
+    expect(passed.reason).toBe('')
+    expect(validateRun(run('E-01', true, 3), TASKS).reason).toBe('')
+  })
 })
 
 describe('счёт', () => {
@@ -128,6 +139,21 @@ describe('счёт', () => {
     expect(text).toContain('PASS')
     expect(text).toContain('Порог:')
     expect(text).toContain('не готов')
+  })
+
+  it('переносит причину провала в счёт и печатает её', () => {
+    const data = { runs: [{ ...run('E-02', false, 9, 2), reason: 'hallucinated_file' }] }
+    const score = scoreRuns(data, TASKS)
+    const row = score.rows.find((item) => item.id === 'E-02')
+    expect(row.reason).toBe('hallucinated_file')
+    const text = formatScore(score)
+    expect(text).toContain('hallucinated_file')
+    expect(text).toContain('выдуманный файл')
+  })
+
+  it('старые отчёты без reason считаются без причины', () => {
+    const score = scoreRuns({ runs: [run('E-01', false, 5)] }, TASKS)
+    expect(score.rows.find((row) => row.id === 'E-01').reason).toBe('')
   })
 })
 
@@ -209,6 +235,40 @@ describe('CLI', () => {
     expect(score.status).toBe(0)
     expect(score.stdout).toContain('E-01')
     expect(score.stdout).toContain('1/10 pass')
+  })
+
+  it('record принимает --reason и rejects неизвестный код', () => {
+    const ok = exec([
+      'record',
+      '--id',
+      'E-02',
+      '--fail',
+      '--steps',
+      '9',
+      '--fabricated',
+      '2',
+      '--reason',
+      'hallucinated_file',
+      '--results',
+      results,
+    ])
+    expect(ok.status).toBe(0)
+    expect(loadResults(results).runs[0].reason).toBe('hallucinated_file')
+
+    const bad = exec([
+      'record',
+      '--id',
+      'E-02',
+      '--fail',
+      '--steps',
+      '9',
+      '--reason',
+      'придумал',
+      '--results',
+      results,
+    ])
+    expect(bad.status).toBe(1)
+    expect(bad.stderr).toMatch(/--reason/)
   })
 
   it('record отдаёт 1 на неизвестной задаче и плохом числе', () => {

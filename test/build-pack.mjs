@@ -6,7 +6,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const OUT = HERE;
 
-const DATE = '31.10.2026';
+const DATE = '01.11.2026';
 const CHECK = process.argv.includes('--check');
 
 const CORE_CODE = ['scripts/next-task.mjs', 'scripts/agent-live.mjs', 'scripts/backlog.mjs'];
@@ -133,7 +133,11 @@ function build({ file, title, purpose, note, files }) {
   const size = { file, bytes: Buffer.byteLength(body, 'utf8'), lines: body.split('\n').length };
 
   if (CHECK) {
-    const current = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
+    // На Windows git с core.autocrlf=true отдаёт снимки в CRLF. Гейт должен
+    // сравнивать текст, а не переводы строк, иначе он краснеет на исправном
+    // репозитории (AGT-22).
+    const raw = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : null;
+    const current = raw === null ? null : raw.replace(/\r\n/g, '\n');
     if (current === null) return { ...size, state: 'нет файла' };
     if (current !== body) return { ...size, state: 'РАСХОДИТСЯ' };
     return { ...size, state: 'совпадает' };

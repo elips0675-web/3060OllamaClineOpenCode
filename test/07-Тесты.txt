@@ -1,16 +1,16 @@
 ТЕСТЫ: 9 файлов vitest (число проверок — вывод npm.cmd test)
-Дата снимка: 31.10.2026. Комплект: 3060 Ollama · Cline · OpenCode.
+Дата снимка: 01.11.2026. Комплект: 3060 Ollama · Cline · OpenCode.
 
 Что это: доказательство поведения: что именно проверяется и чего тесты не проверяют.
 Как читать: тесты — это спецификация в исполняемом виде. Если утверждение в документации не покрыто тестом, считайте его заявлением, а не фактом.
 
 Состав (9 файлов, порядок = порядок в файле):
-   1. scripts/next-task.test.mjs — 25165 байт, 559 строк
+   1. scripts/next-task.test.mjs — 28105 байт, 627 строк
    2. scripts/agent-live.test.mjs — 33789 байт, 780 строк
    3. scripts/backlog.test.mjs — 10011 байт, 272 строк
    4. scripts/ai-profile.test.mjs — 11579 байт, 299 строк
    5. scripts/project-brief.test.mjs — 9414 байт, 249 строк
-   6. scripts/agent-eval.test.mjs — 9624 байт, 286 строк
+   6. scripts/agent-eval.test.mjs — 11648 байт, 346 строк
    7. scripts/init-project.test.mjs — 8669 байт, 207 строк
    8. scripts/retention-gate.test.mjs — 6195 байт, 166 строк
    9. scripts/stage-section.test.mjs — 7010 байт, 165 строк
@@ -20,7 +20,7 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: scripts/next-task.test.mjs  (25165 байт, 559 строк)
+ФАЙЛ: scripts/next-task.test.mjs  (28105 байт, 627 строк)
 ================================================================================
 
 import { describe, expect, it } from 'vitest'
@@ -579,6 +579,74 @@ describe('watch-пункты', () => {
     const items = parseBacklog(TEXT)
     expect(pickTask(items, { local: true, id: 'AGT-11' })).toBe(null)
     expect(pickTask(items, { local: true, id: 'AGT-11', includeBlocked: true })).toBe(null)
+  })
+})
+
+describe('явные маркеры статуса', () => {
+  const TEXT = [
+    '# Что доделать — бэклог',
+    '',
+    '## 🟡 Агентные проверки (P2)',
+    '',
+    '### BLK-06 — Ждёт сборки',
+    'Факт: `scripts/next-task.mjs` не разбирает маркер.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026) (blocked: проверка после BLK-01)',
+    '',
+    '### RUN-06 — Выбор владельца',
+    'Факт: `scripts/next-task.mjs` не разбирает решение.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026) (decision)',
+    '',
+    '### AGT-20 — Упоминание в цитате',
+    'Факт: в тексте есть `решение владельца` как пример, но это не блокер — `scripts/next-task.mjs:12`.',
+    '',
+    'Статус: ⏳ (проверено 31.10.2026)',
+    '',
+  ].join('\n')
+
+  it('маркер (blocked: …) даёт blocked, а не no-evidence', () => {
+    const item = parseBacklog(TEXT).find((row) => row.id === 'BLK-06')
+    expect(item.status).toBe('blocked')
+  })
+
+  it('маркер (decision) даёт decision, а не ready', () => {
+    const item = parseBacklog(TEXT).find((row) => row.id === 'RUN-06')
+    expect(item.status).toBe('decision')
+  })
+
+  it('фраза в обратных кавычках не делает пункт blocked', () => {
+    const item = parseBacklog(TEXT).find((row) => row.id === 'AGT-20')
+    expect(item.status).toBe('ready')
+  })
+})
+
+describe('цитаты документов и имена без расширения', () => {
+  it('принимает .txt, .prisma, .toml и .ini как file:line', () => {
+    const files = extractFiles(
+      '`08-Куда-писать-команды.txt:262`, `server/prisma/schema.prisma:63`, `pyproject.toml:4`, `setup.ini:2`',
+    )
+    expect(files).toEqual([
+      { path: '08-Куда-писать-команды.txt', lines: '262' },
+      { path: 'server/prisma/schema.prisma', lines: '63' },
+      { path: 'pyproject.toml', lines: '4' },
+      { path: 'setup.ini', lines: '2' },
+    ])
+  })
+
+  it('принимает имя без расширения, если файл есть в инвентаре', () => {
+    const inventory = ['models/Modelfile-14b-q4', '.clinerules', 'scripts/next-task.mjs']
+    expect(extractFiles('`models/Modelfile-14b-q4`', inventory)).toEqual([
+      { path: 'models/Modelfile-14b-q4', lines: '' },
+    ])
+    expect(extractFiles('`.clinerules:5`', inventory)).toEqual([
+      { path: '.clinerules', lines: '5' },
+    ])
+  })
+
+  it('не принимает имя без расширения, которого нет в инвентаре', () => {
+    expect(extractFiles('`models/Modelfile-14b-q4`')).toEqual([])
+    expect(extractFiles('`models/Modelfile-14b-q4`', ['scripts/next-task.mjs'])).toEqual([])
   })
 })
 
@@ -2199,7 +2267,7 @@ describe('CLI', () => {
 })
 
 ================================================================================
-ФАЙЛ: scripts/agent-eval.test.mjs  (9624 байт, 286 строк)
+ФАЙЛ: scripts/agent-eval.test.mjs  (11648 байт, 346 строк)
 ================================================================================
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -2278,6 +2346,17 @@ describe('запись прогона', () => {
     expect(next.runs[0].note).toBe('ок')
     expect(next.runs[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
+
+  it('типизирует причину провала и чистит её у pass', () => {
+    const failed = validateRun({ ...run('E-01', false, 7), reason: 'gave_up_prematurely' }, TASKS)
+    expect(failed.reason).toBe('gave_up_prematurely')
+    expect(() => validateRun({ ...run('E-01', false, 7), reason: 'придумал' }, TASKS)).toThrow(
+      /--reason/,
+    )
+    const passed = validateRun({ ...run('E-01', true, 3), reason: 'hallucinated_file' }, TASKS)
+    expect(passed.reason).toBe('')
+    expect(validateRun(run('E-01', true, 3), TASKS).reason).toBe('')
+  })
 })
 
 describe('счёт', () => {
@@ -2332,6 +2411,21 @@ describe('счёт', () => {
     expect(text).toContain('PASS')
     expect(text).toContain('Порог:')
     expect(text).toContain('не готов')
+  })
+
+  it('переносит причину провала в счёт и печатает её', () => {
+    const data = { runs: [{ ...run('E-02', false, 9, 2), reason: 'hallucinated_file' }] }
+    const score = scoreRuns(data, TASKS)
+    const row = score.rows.find((item) => item.id === 'E-02')
+    expect(row.reason).toBe('hallucinated_file')
+    const text = formatScore(score)
+    expect(text).toContain('hallucinated_file')
+    expect(text).toContain('выдуманный файл')
+  })
+
+  it('старые отчёты без reason считаются без причины', () => {
+    const score = scoreRuns({ runs: [run('E-01', false, 5)] }, TASKS)
+    expect(score.rows.find((row) => row.id === 'E-01').reason).toBe('')
   })
 })
 
@@ -2413,6 +2507,40 @@ describe('CLI', () => {
     expect(score.status).toBe(0)
     expect(score.stdout).toContain('E-01')
     expect(score.stdout).toContain('1/10 pass')
+  })
+
+  it('record принимает --reason и rejects неизвестный код', () => {
+    const ok = exec([
+      'record',
+      '--id',
+      'E-02',
+      '--fail',
+      '--steps',
+      '9',
+      '--fabricated',
+      '2',
+      '--reason',
+      'hallucinated_file',
+      '--results',
+      results,
+    ])
+    expect(ok.status).toBe(0)
+    expect(loadResults(results).runs[0].reason).toBe('hallucinated_file')
+
+    const bad = exec([
+      'record',
+      '--id',
+      'E-02',
+      '--fail',
+      '--steps',
+      '9',
+      '--reason',
+      'придумал',
+      '--results',
+      results,
+    ])
+    expect(bad.status).toBe(1)
+    expect(bad.stderr).toMatch(/--reason/)
   })
 
   it('record отдаёт 1 на неизвестной задаче и плохом числе', () => {

@@ -1,5 +1,5 @@
 КОД: ПЕРЕКЛЮЧАТЕЛЬ ПРОФИЛЕЙ, БРИФ, ЭВАЛЫ, УСТАНОВЩИК
-Дата снимка: 31.10.2026. Комплект: 3060 Ollama · Cline · OpenCode.
+Дата снимка: 01.11.2026. Комплект: 3060 Ollama · Cline · OpenCode.
 
 Что это: остальные четыре скрипта: смена модели в Cline и OpenCode, сборщик фактов о проекте, измеритель агента, установщик правил в чужой проект.
 Как читать: эти скрипты не участвуют в выборе задачи, но их поведение описано в 01, разделы 4 и 8.
@@ -7,7 +7,7 @@
 Состав (4 файлов, порядок = порядок в файле):
    1. scripts/ai-profile.mjs — 24994 байт, 648 строк
    2. scripts/project-brief.mjs — 14914 байт, 462 строк
-   3. scripts/agent-eval.mjs — 10674 байт, 292 строк
+   3. scripts/agent-eval.mjs — 11627 байт, 309 строк
    4. scripts/init-project.mjs — 14059 байт, 347 строк
 
 Ничего не переписано: ниже дословное содержимое перечисленных файлов,
@@ -1133,7 +1133,7 @@ if (invokedDirectly) {
 export const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 ================================================================================
-ФАЙЛ: scripts/agent-eval.mjs  (10674 байт, 292 строк)
+ФАЙЛ: scripts/agent-eval.mjs  (11627 байт, 309 строк)
 ================================================================================
 
 // Эвалы агента: 10 задач, запись результатов и счёт.
@@ -1162,6 +1162,15 @@ export const THRESHOLDS = {
   minPass: 7,
   maxFabricated: 0,
   maxAvgSteps: 6,
+}
+
+// Причина провала — код, а не свободный текст: по нему видно, что чинить.
+export const FAIL_REASONS = {
+  hallucinated_file: 'выдуманный файл',
+  hallucinated_line: 'выдуманная строка',
+  gave_up_prematurely: 'сдался раньше',
+  ignored_constraint: 'нарушил ограничение',
+  other: 'другое',
 }
 
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'))
@@ -1199,7 +1208,11 @@ export function validateRun(run, tasks) {
   if (typeof run.pass !== 'boolean') throw new Error('нужен ровно один из флагов --pass / --fail')
   if (!isCount(run.steps)) throw new Error('--steps требует целое ≥ 0')
   if (!isCount(run.fabricated)) throw new Error('--fabricated требует целое ≥ 0')
-  return { ...run, note: String(run.note || '').trim() }
+  const reason = run.pass ? '' : String(run.reason || '').trim()
+  if (reason && !Object.hasOwn(FAIL_REASONS, reason)) {
+    throw new Error(`--reason: ${reason}; допустимо: ${Object.keys(FAIL_REASONS).join(', ')}`)
+  }
+  return { ...run, note: String(run.note || '').trim(), reason }
 }
 
 export function recordRun(data, run, tasks) {
@@ -1222,6 +1235,7 @@ export function scoreRuns(data, tasks) {
       steps: last ? last.steps : null,
       fabricated: last ? last.fabricated : null,
       note: last ? last.note : '',
+      reason: last ? last.reason || '' : '',
       at: last ? last.at : '',
     }
   })
@@ -1275,6 +1289,7 @@ export function formatScore(score) {
         `${verdict.padEnd(5)} ${String(row.steps ?? '—').padStart(4)}  ${String(row.fabricated ?? '—').padStart(9)}`,
     )
     if (row.note) lines.push(`      … ${row.note}`)
+    if (!row.pass && row.reason) lines.push(`      ! ${row.reason} — ${FAIL_REASONS[row.reason] || row.reason}`)
   }
   lines.push('')
   lines.push(
@@ -1315,11 +1330,12 @@ function usage() {
 
   node scripts/agent-eval.mjs list [--tasks <файл>]
   node scripts/agent-eval.mjs prompt --id E-01 [--tasks <файл>]
-  node scripts/agent-eval.mjs record --id E-01 (--pass|--fail) [--steps N] [--fabricated N] [--note "..."] [--results <файл>]
+  node scripts/agent-eval.mjs record --id E-01 (--pass|--fail) [--steps N] [--fabricated N] [--reason код] [--note "..."] [--results <файл>]
   node scripts/agent-eval.mjs score [--strict] [--tasks <файл>] [--results <файл>]
 
   --steps       сколько шагов/правок сделал агент
   --fabricated  сколько несуществующих файлов/функций/полей назвал
+  --reason      причина fail: ${Object.keys(FAIL_REASONS).join(' | ')}
   --strict      exit 1, если порог не достигнут
 `
 }
@@ -1399,6 +1415,7 @@ function main(argv) {
           pass: args.flags.has('pass'),
           steps: value('steps'),
           fabricated: value('fabricated'),
+          reason: args.values.reason || '',
           note: args.values.note || '',
         },
         tasks,

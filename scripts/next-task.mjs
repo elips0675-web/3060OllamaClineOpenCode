@@ -13,9 +13,25 @@ const OWNER_BLOCK = /решение владельца|зависит от вл�
 const CLOSED_ITEM = /закрыт\s+Stage|закрыт\s+\d{2}\.\d{2}\.\d{4}|\(закрыт|✅\s*\d{2}\.\d{2}\.\d{4}/iu
 const ACCEPTED_DECISION = /риск принят|решено оставить|решение зафиксировано|осознанное ограничение/iu
 const WATCH_ITEM = /\(watch\b|не делать сейчас/iu
+// Явные маркеры из шапки бэклога: «(blocked: причина)» и «(decision)».
+// Фразы в теле — запасной путь, они ловят слова в цитатах (AGT-20).
+const BLOCKED_MARKER = /\(blocked\b/iu
+const DECISION_MARKER = /\(decision\b/iu
+
+// Текст вне кавычек: упоминание «решение владельца» в примере не должно
+// делать пункт заблокированным.
+function unquoted(text) {
+  return String(text)
+    .replace(/`[^`\n]*`/gu, ' ')
+    .replace(/«[^»\n]*»/gu, ' ')
+    .replace(/"[^"\n]*"/gu, ' ')
+}
 
 const ITEM_ID = /\b([A-Z][A-Z0-9]{1,7}-\d{2})\b/u
-const PATH_TOKEN = /`([A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:tsx?|jsx?|mjs|cjs|sql|md|json|ya?ml|css|ps1|bat|conf))(?::(\d+(?:[-,]\d+)*))?`/gu
+const PATH_TOKEN = /`([\p{L}\p{N}_][\p{L}\p{N}_./-]*\.(?:tsx?|jsx?|mjs|cjs|sql|md|json|ya?ml|css|ps1|bat|conf|txt|prisma|toml|ini))(?::(\d+(?:[-,]\d+)*))?`/gu
+// Имена без расширения (`models/Modelfile-14b-q4`, `.clinerules`) принимаются
+// только если такой файл реально есть в проекте — иначе это не цитата (AGT-21).
+const BARE_TOKEN = /`(\.?[\p{L}\p{N}_][\p{L}\p{N}_./-]*)(?::(\d+(?:[-,]\d+)*))?`/gu
 const VERIFIED_DATE = /(\d{2}\.\d{2}\.\d{4})/u
 const CODE_PATH = /^(src|server|e2e)\//u
 
@@ -45,13 +61,27 @@ export function splitSections(text) {
   return out.filter((section) => section.heading)
 }
 
-export function extractFiles(text) {
+export function extractFiles(text, inventory = null) {
   const seen = new Map()
   for (const match of String(text).matchAll(PATH_TOKEN)) {
     const file = match[1]
     const lines = match[2] ? match[2] : ''
     const prev = seen.get(file)
     if (!prev || (!prev.lines && lines)) seen.set(file, { path: file, lines })
+  }
+  if (inventory) {
+    for (const match of String(text).matchAll(BARE_TOKEN)) {
+      const file = match[1]
+      // Точка в начале — это dotfile (`.clinerules`), а не расширение.
+      const dot = file.lastIndexOf('.')
+      const hasExtension = dot > 0 && /^[A-Za-z0-9]+$/u.test(file.slice(dot + 1))
+      if (hasExtension) continue
+      const hits = inventory.filter((candidate) => candidate === file || candidate.endsWith(`/${file}`))
+      if (hits.length !== 1) continue
+      const lines = match[2] ? match[2] : ''
+      const prev = seen.get(hits[0])
+      if (!prev || (!prev.lines && lines)) seen.set(hits[0], { path: hits[0], lines })
+    }
   }
   return [...seen.values()]
 }
@@ -105,9 +135,10 @@ export function resolveBarePaths(files, inventory) {
 
 export function statusOf(item) {
   const text = `${item.title}\n${item.body}`
-  if (item.blocked || OWNER_BLOCK.test(text)) return 'blocked'
+  const plain = unquoted(text)
+  if (item.blocked || BLOCKED_MARKER.test(plain) || OWNER_BLOCK.test(plain)) return 'blocked'
   if (CLOSED_ITEM.test(text)) return 'closed'
-  if (ACCEPTED_DECISION.test(text)) return 'decision'
+  if (DECISION_MARKER.test(plain) || ACCEPTED_DECISION.test(plain)) return 'decision'
   if (WATCH_ITEM.test(text)) return 'watch'
   if (item.evidence === 'none') return 'no-evidence'
   return 'ready'
@@ -115,7 +146,7 @@ export function statusOf(item) {
 
 function itemFrom(id, title, body, meta) {
   const raw = `${title}\n${body}`
-  const files = extractFiles(raw)
+  const files = extractFiles(raw, meta.inventory || null)
   const withLines = files.filter((file) => Boolean(file.lines))
   const evidence = withLines.length ? 'file:line' : files.length ? 'file' : 'none'
   const dateMatch = raw.match(VERIFIED_DATE)
@@ -152,7 +183,7 @@ function dedupe(items) {
   return [...byId.values()]
 }
 
-export function parseBacklog(text) {
+export function parseBacklog(text, inventory = null) {
   const items = []
   for (const section of splitSections(text)) {
     const meta = classifySection(section.heading)
@@ -181,6 +212,7 @@ export function parseBacklog(text) {
           order,
           line: lineNo,
           queue: Boolean(meta.queue),
+          inventory,
           blocked: Boolean(meta.blocked) || Boolean(subMeta.blocked),
         }))
         continue
@@ -204,6 +236,7 @@ export function parseBacklog(text) {
           order,
           line: lineNo,
           queue: Boolean(meta.queue),
+          inventory,
           blocked: Boolean(meta.blocked) || Boolean(subMeta.blocked),
         }))
         continue
@@ -221,6 +254,7 @@ export function parseBacklog(text) {
           order,
           line: lineNo,
           queue: Boolean(meta.queue),
+          inventory,
           blocked: Boolean(meta.blocked) || Boolean(subMeta.blocked),
         }))
         continue
@@ -245,6 +279,7 @@ export function parseBacklog(text) {
           order: Number(numberedMatch[1]),
           line: lineNo,
           queue: true,
+          inventory,
           blocked: Boolean(meta.blocked),
         }))
       }
@@ -515,13 +550,14 @@ function printHelp() {
     '  node scripts/next-task.mjs --json                карточка в JSON',
     '  node scripts/next-task.mjs --id QA-01            конкретный пункт',
     '  node scripts/next-task.mjs --queue-only          только раздел «Очередь этапов»',
-    '  node scripts/next-task.mjs --include-blocked     вместе с блокерами владельца',
+    '  node scripts/next-task.mjs --include-blocked     вместе с blocked и watch-пунктами',
     '  node scripts/next-task.mjs --allow-no-evidence   и пункты без цитаты кода',
     '  node scripts/next-task.mjs --out tmp/next-task.txt  сохранить карточку в файл',
     '  node scripts/next-task.mjs --backlog <путь>      другой файл бэклога',
     '',
-    'Статусы: ready (брать), blocked (владелец/ключи), watch (не делать сейчас),',
-    '         closed (закрыт), decision (принятое решение), no-evidence (нет file:line).',
+    'Статусы: ready (брать), blocked (владелец/ключи/маркер), watch (не делать сейчас),',
+    '         closed (закрыт), decision (принятое решение/маркер), no-evidence (нет file:line).',
+    'По умолчанию скрыты blocked, watch, decision и no-evidence.',
     'Exit: 0 — задача найдена, 1 — брать нечего, 2 — ошибка аргументов.',
     '',
   ].join('\n'))
@@ -587,8 +623,8 @@ function main() {
     }
     throw backlogRead.error
   }
-  const parsed = parseBacklog(backlogRead.text)
   const inventory = walkInventory(ROOT)
+  const parsed = parseBacklog(backlogRead.text, inventory)
   const items = parsed.map((item) => ({ ...item, files: resolveBarePaths(item.files, inventory) }))
   if (!items.length) {
     process.stderr.write('В бэклоге не найдено ни одного пункта с ID.\n')
