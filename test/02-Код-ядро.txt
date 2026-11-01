@@ -5,8 +5,8 @@
 Как читать: сначала прочитайте «01-Что-как-работает», разделы 4–6; здесь только код. Тесты этих скриптов — в файле 06.
 
 Состав (3 файлов, порядок = порядок в файле):
-   1. scripts/next-task.mjs — 27953 байт, 683 строк
-   2. scripts/agent-live.mjs — 39705 байт, 899 строк
+   1. scripts/next-task.mjs — 31179 байт, 758 строк
+   2. scripts/agent-live.mjs — 39693 байт, 899 строк
    3. scripts/backlog.mjs — 13866 байт, 344 строк
 
 Ничего не переписано: ниже дословное содержимое перечисленных файлов,
@@ -14,7 +14,7 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: scripts/next-task.mjs  (27953 байт, 683 строк)
+ФАЙЛ: scripts/next-task.mjs  (31179 байт, 758 строк)
 ================================================================================
 
 import fs from 'node:fs'
@@ -447,7 +447,10 @@ const RISK_DOMAINS = [
   {
     code: 'access',
     label: 'доступ и секреты',
-    pattern: /jwt|oauth|\bauth\b|csrf|adminauth|секрет|\bтокен|уязвим|\bidor\b|rate.?limit|парол|sanitiz|xss|sql-?инъекц/iu,
+    pattern: /jwt|oauth|\bauth\b|csrf|adminauth|секрет|\bтокен|уязвим|\bidor\b|rate.?limit|парол|sanitiz|xss|sql-?инъекц|\b2fa\b|\.env\b/iu,
+    // В тексте «auth-2fa» — имя чужого теста, а не работа с доступом; в путях
+    // файлов дефис наоборот нормален (`auth-refresh.ts`), там работает pattern.
+    prose: /jwt|oauth|(?<![\w-])auth(?![\w-])|csrf|adminauth|секрет|\bтокен|уязвим|\bidor\b|rate.?limit|парол|sanitiz|xss|sql-?инъекц|(?<![\w-])2fa(?![\w-])|\.env\b/iu,
   },
   {
     code: 'schema',
@@ -462,8 +465,19 @@ const RISK_DOMAINS = [
 ]
 
 export function riskyDomain(item) {
-  const haystack = [item.title, item.body, item.section || '', ...item.files.map((file) => file.path)].join('\n')
-  return RISK_DOMAINS.find((domain) => domain.pattern.test(haystack)) || null
+  // Заголовок раздела — контекст всего раздела, а не текст пункта: «миграции
+  // идемпотентные» в названии раздела помечало schema все 8 пунктов NEW-*
+  // (факт RUN-02, 01.11.2026). Из обратных кавычек убираем только не-файлы:
+  // `auth-2fa` — имя чужого теста, а `.env` и `auth.json` — реальные файлы.
+  const prose = [item.title, item.body]
+    .join('\n')
+    .replace(/`([^`]*)`/g, (whole, inner) => (/\.(?:[a-z]{2,10})$/iu.test(inner.trim()) ? ` ${inner.trim()} ` : ' '))
+  const paths = item.files.map((file) => file.path).join('\n')
+  return (
+    RISK_DOMAINS.find(
+      (domain) => (domain.prose || domain.pattern).test(prose) || domain.pattern.test(paths),
+    ) || null
+  )
 }
 
 export function routeFor(item) {
@@ -500,6 +514,58 @@ export function routeFor(item) {
   }
 }
 
+export function phasesFor(item) {
+  const count = item.files.length
+  const risk = riskyDomain(item)
+
+  if (item.evidence !== 'file:line') {
+    return [
+      {
+        name: 'ФАКТЫ',
+        target: 'cloud',
+        text: 'облако: нет цитаты file:line — сначала факты и план, потом правка',
+      },
+    ]
+  }
+
+  const plan =
+    count > 1 || risk
+      ? {
+          name: 'ПЛАН',
+          target: 'cloud',
+          text: `облако: implementation_plan.md на ${count} файл(ов), шаг = файл + точная правка + гейт`,
+        }
+      : {
+          name: 'ПЛАН',
+          target: 'local',
+          text: '3060: один файл — план не нужен, сразу шаг',
+        }
+
+  const step = risk
+    ? {
+        name: 'ШАГ',
+        target: 'cloud',
+        text: `облако: правка в риск-домене (${risk.label}) — 14B ошибается молча`,
+      }
+    : { name: 'ШАГ', target: 'local', text: '3060: один шаг плана за подход, один файл' }
+
+  return [
+    plan,
+    step,
+    {
+      name: 'ПРОВЕРКА',
+      target: 'local',
+      text: 'гейты проекта из его package.json, exit 0; красный гейт — в облако, а не «ещё разок»',
+    },
+  ]
+}
+
+export function phasesText(item) {
+  return phasesFor(item)
+    .map((phase) => `${phase.name}: ${phase.text}`)
+    .join('; ')
+}
+
 export function buildCard(item, project = null) {
   const ordered = sortFilesForSlice(item.files)
   const slice = ordered.length ? ordered[0].path : ''
@@ -513,6 +579,7 @@ export function buildCard(item, project = null) {
   out.push(`Цитата кода: ${item.evidence === 'file:line' ? 'да (file:line)' : item.evidence === 'file' ? 'только путь, без строки' : 'нет'}`)
   out.push(`Файлов в пункте: ${item.files.length}`)
   out.push(`Маршрут: ${routeFor(item).text}`)
+  out.push(`Фазы: ${phasesText(item)}`)
   out.push('='.repeat(80))
   out.push('')
   out.push('СУТЬ')
@@ -573,6 +640,7 @@ function printHelp() {
     '  node scripts/next-task.mjs --allow-no-evidence   и пункты без цитаты кода',
     '  node scripts/next-task.mjs --out tmp/next-task.txt  сохранить карточку в файл',
     '  node scripts/next-task.mjs --backlog <путь>      другой файл бэклога',
+    '  node scripts/next-task.mjs --root <путь>         корень проекта для гейтов (по умолчанию — текущий каталог)',
     '',
     'Статусы: ready (брать), blocked (владелец/ключи/маркер), watch (не делать сейчас),',
     '         closed (закрыт), decision (принятое решение/маркер), no-evidence (нет file:line).',
@@ -601,6 +669,7 @@ function parseArgs(argv) {
     else if (arg === '--id') options.id = next()
     else if (arg === '--out') options.out = next()
     else if (arg === '--backlog') options.backlog = next()
+    else if (arg === '--root') options.root = next()
     else {
       process.stderr.write(`Неизвестный аргумент: ${arg}\n`)
       return { error: true }
@@ -683,11 +752,17 @@ function main() {
   if (options.route) {
     const route = routeFor(task)
     process.stdout.write(`${route.target}\t${route.text}\n`)
+    phasesFor(task).forEach((phase) => process.stdout.write(`  ${phase.name} (${phase.target}): ${phase.text}\n`))
     process.exit(0)
   }
 
-  const project = projectCommands()
-  const payload = options.json ? JSON.stringify({ task, route: routeFor(task), gates: gatesFor(task, project), card: buildCard(task, project) }, null, 2) : buildCard(task, project)
+  const projectRoot = options.root
+    ? path.resolve(options.root)
+    : fs.existsSync(path.join(process.cwd(), 'package.json'))
+      ? process.cwd()
+      : ROOT
+  const project = projectCommands(projectRoot)
+  const payload = options.json ? JSON.stringify({ task, route: routeFor(task), phases: phasesFor(task), gates: gatesFor(task, project), card: buildCard(task, project) }, null, 2) : buildCard(task, project)
   if (options.out) {
     const outPath = path.resolve(ROOT, options.out)
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
@@ -701,7 +776,7 @@ function main() {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()
 
 ================================================================================
-ФАЙЛ: scripts/agent-live.mjs  (39705 байт, 899 строк)
+ФАЙЛ: scripts/agent-live.mjs  (39693 байт, 899 строк)
 ================================================================================
 
 // Живой прогон эвалов локальной моделью через Ollama API (tool calling).
@@ -1232,7 +1307,7 @@ export function initialMessages(task, root) {
         '- Тест — не поведение кода.',
         '- Называть файл, функцию или поле, которых не видел в выводе инструмента.',
         '- Писать вызов инструмента вместо вывода.',
-        '- Утверждать «X зависит от Y» без чтения X.',
+        '- «X зависит от Y» без чтения X.',
         '',
         'ПОИСК',
         '- Одна строка на шаблон: без `{...}`, `[^)]*`, `.*`.',
@@ -1242,7 +1317,7 @@ export function initialMessages(task, root) {
         '- Prisma: `model tickets {`, ищи `tickets`, не `Ticket`; нет `required: true`.',
         '- Роут — mount или app.get, не middleware.',
         '',
-        'Если задача > 6 файлов или деньги/доступы/БД — откажись, предложи облако.',
+        'Правка денег/доступов/БД или > 6 файлов — стоп, облако; вопрос по БД — отвечай.',
         `Корень: ${root}`,
         'Формат: вывод, факты с file:line, что не проверено.',
       ].join('\n'),
