@@ -149,6 +149,15 @@ latest`), запросы через `tmp/run04probe/probe.mjs`:
 запущен, поэтому его база не тронута. Не проверено: что Cline показывает это
 в панели API Configuration — нужен GUI.
 
+Факт (01.11.2026, живая база при запущенном VS Code): `state.vscdb` читается
+read-only через `node:sqlite` без ошибок блокировки (mtime 21:20:55), но профиля
+комплекта в Cline нет — `apiModelId`/`ollamaModelId`/plan+act = `servicedesk-qwen`,
+baseUrl `http://localhost:11434`, ctx 16384; `matchProfile` даёт `null`.
+Запись скрипта в эту базу была 29.10 (бэкап `state.vscdb.bak-2026-10-29T03-12-11-790Z`,
+Cline-блок в нём пустой), дальше модель сменили вручную. Менять живое состояние
+нельзя: `scripts/ai-profile.mjs:477-482` отказывается при запущенном VS Code.
+Осталось человеку: перезапуск VS Code и панель API Configuration.
+
 Статус: ⏳ (проверено 01.11.2026) (blocked: живой `state.vscdb` не менялся при запущенном VS Code — нужен GUI и человек)
 
 ## 🟡 Агентные проверки (P2)
