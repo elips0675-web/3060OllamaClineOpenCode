@@ -64,6 +64,8 @@
 | `scripts/backlog.test.mjs` | 21 тест механизма: канон, отказ от строк `## ✅`, ID+дата в журнале, CLI |
 | `scripts/symbols.mjs` | индекс символов: экспорты, функции, роуты 3–5 КБ без чтения файлов |
 | `scripts/symbols.test.mjs` | 19 тестов индекса: разбор, CommonJS, роуты, шум, лимит, бюджет, CLI |
+| `scripts/scheduled-report.mjs` | отчёт по расписанию: бриф + индекс, только чтение |
+| `scripts/scheduled-report.test.mjs` | 12 тестов отчёта: шапка, git, JSON, только чтение, CLI |
 | `scripts/init-project.mjs` | установщик правил, workflows и `cline_docs` в любой проект |
 | `scripts/init-project.test.mjs` | 18 тестов установщика: dry-run, конфликты, идемпотентность, откат |
 | `scripts/agent-eval.mjs` | эвалы агента: список задач, запись прогонов, счёт |
@@ -221,7 +223,7 @@ npm.cmd run backlog:open -- --id DOC-01 --title "Новый пункт"
 
 | Гейт | Команда | Что ловит | Когда запускать |
 |---|---|---|---|
-| Тесты | `npm.cmd test` | 293 проверки в 10 файлах: селектор, бэклог, эвалы, установщик, живой прогон, окно правок, заготовка журнала, индекс символов | после любой правки `scripts/` |
+| Тесты | `npm.cmd test` | 305 проверок в 11 файлах: селектор, бэклог, эвалы, установщик, живой прогон, окно правок, заготовка журнала, индекс символов, отчёт по расписанию | после любой правки `scripts/` |
 | Канон бэклога | `npm.cmd run check:backlog` | ID и даты проверки, дубли, строки `## ✅`, закрытие без ID/даты в журнале | после правки `Что доделать.txt` |
 | Снимки пакета | `node test/build-pack.mjs --check` | расхождение `test/0X-*.txt` с источником | перед выгрузкой `test/` в чат |
 | Окно правок | `npm.cmd run retent:check` | незакоммиченные файлы и строки сверх 6/300 (`--preflight` — 10/450) | в конце каждого блока и перед коммитом |
@@ -367,9 +369,17 @@ node scripts/symbols.mjs --root "D:\swiftmatch1bdnoutprodpart"
 node scripts/symbols.mjs --out tmp\symbols.txt
 ```
 
+Отчёт по расписанию (`scripts/scheduled-report.mjs`) — бриф и индекс в одном
+markdown-файле `tmp/report-ГГГГ-ММ-ДД.md`; проект, БД и git не меняются.
+
+```
+node scripts/scheduled-report.mjs --root .
+node scripts/scheduled-report.mjs --json --out tmp\report.json
+```
+
 Тесты (66 у селектора + 27 у эвалов + 62 у живого прогона + 22 у
 переключателя + 19 у сборщика + 21 у бэклога + 21 у заготовки журнала +
-18 у установщика + 18 у гейта окна + 19 у индекса символов = 293) запускаются здесь же:
+18 у установщика + 18 у гейта окна + 19 у индекса символов + 12 у отчёта по расписанию = 305) запускаются здесь же:
 
 ```
 npm.cmd install
@@ -383,6 +393,7 @@ npm.cmd run test:init
 npm.cmd run test:retent
 npm.cmd run test:section
 npm.cmd run test:symbols
+npm.cmd run test:report
 npm.cmd run test
 ```
 
