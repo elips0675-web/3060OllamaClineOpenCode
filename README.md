@@ -40,7 +40,7 @@
 | `templates/rules/00-project.md` | паспорт проекта: стек, команды, риск-домены |
 | `templates/verify-checklist.md` | проверка до/после правки и команды-заготовки |
 | `templates/workflows/*.md` | 7 процедур для `.clinerules/workflows/` |
-| `templates/cline_docs/*.md` | Memory Bank: 5 файлов для `cline_docs/` проекта |
+| `templates/cline_docs/*.md` | Memory Bank: 7 файлов для `cline_docs/` проекта |
 | `docs/AGENTS-cline-setup.md` | Compact Prompt, лимиты, temperature, Confidence Check |
 | `docs/AGENTS-workflow.md` | механика «Что сделано ↔ Что доделать», чекпойнт, гейт |
 | `docs/AGENTS-production.md` | что значит «готово»: «создано ↔ доказано», pre-flight из 5 пунктов |
@@ -285,6 +285,8 @@ cline_docs/activeContext.md    текущая задача, план, следу
 cline_docs/systemPatterns.md   принятые решения и почему
 cline_docs/techContext.md      команды, порты, лимиты железа
 cline_docs/progress.md         что сделано / сломано / не проверено
+cline_docs/project_facts.md    постоянные факты: порты, запреты, кто коммитит
+cline_docs/user_preferences.md как человек хочет получать работу
 ```
 
 **4. Проверка** — `templates/verify-checklist.md`: diff, линт, типы, точечный

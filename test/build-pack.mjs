@@ -37,6 +37,8 @@ const RULES = [
   'templates/cline_docs/systemPatterns.md',
   'templates/cline_docs/techContext.md',
   'templates/cline_docs/progress.md',
+  'templates/cline_docs/project_facts.md',
+  'templates/cline_docs/user_preferences.md',
   'templates/workflows/brief.md',
   'templates/workflows/fix.md',
   'templates/workflows/test.md',

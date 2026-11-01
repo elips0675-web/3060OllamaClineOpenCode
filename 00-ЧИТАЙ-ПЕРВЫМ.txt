@@ -38,7 +38,7 @@ templates\few-shot.md            3 примера: факт с file:line, пои
 templates\rules\00-project.md    паспорт проекта: стек, команды, риск-домены
 templates\verify-checklist.md    проверка до/после правки
 templates\workflows\             7 процедур для .clinerules/workflows
-templates\cline_docs\            Memory Bank проекта (5 файлов)
+templates\cline_docs\            Memory Bank проекта (7 файлов)
 docs\AGENTS-workflow.md          механика журналов, чекпойнт, гейт
 docs\AGENTS-cline-setup.md       Compact Prompt, лимиты 14B, Confidence Check
 evals\tasks.json                 10 задач с бинарным критерием

@@ -5,7 +5,7 @@
 Как читать: документы описывают замысел; код в файлах 02–03 описывает факт. При расхождении верьте коду и «08-Что-доделать».
 
 Состав (10 файлов, порядок = порядок в файле):
-   1. README.md — 33393 байт, 420 строк
+   1. README.md — 33603 байт, 422 строк
    2. 00-ЧИТАЙ-ПЕРВЫМ.txt — 22039 байт, 267 строк
    3. 01-Как-всё-работает.txt — 16785 байт, 242 строк
    4. 02-Установить-локально.bat — 7154 байт, 135 строк
@@ -21,7 +21,7 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: README.md  (33393 байт, 420 строк)
+ФАЙЛ: README.md  (33603 байт, 422 строк)
 ================================================================================
 
 # 3060 Ollama · Cline · OpenCode
@@ -66,7 +66,7 @@
 | `templates/rules/00-project.md` | паспорт проекта: стек, команды, риск-домены |
 | `templates/verify-checklist.md` | проверка до/после правки и команды-заготовки |
 | `templates/workflows/*.md` | 7 процедур для `.clinerules/workflows/` |
-| `templates/cline_docs/*.md` | Memory Bank: 5 файлов для `cline_docs/` проекта |
+| `templates/cline_docs/*.md` | Memory Bank: 7 файлов для `cline_docs/` проекта |
 | `docs/AGENTS-cline-setup.md` | Compact Prompt, лимиты, temperature, Confidence Check |
 | `docs/AGENTS-workflow.md` | механика «Что сделано ↔ Что доделать», чекпойнт, гейт |
 | `docs/AGENTS-production.md` | что значит «готово»: «создано ↔ доказано», pre-flight из 5 пунктов |
@@ -311,6 +311,8 @@ cline_docs/activeContext.md    текущая задача, план, следу
 cline_docs/systemPatterns.md   принятые решения и почему
 cline_docs/techContext.md      команды, порты, лимиты железа
 cline_docs/progress.md         что сделано / сломано / не проверено
+cline_docs/project_facts.md    постоянные факты: порты, запреты, кто коммитит
+cline_docs/user_preferences.md как человек хочет получать работу
 ```
 
 **4. Проверка** — `templates/verify-checklist.md`: diff, линт, типы, точечный
@@ -488,7 +490,7 @@ templates\few-shot.md            3 примера: факт с file:line, пои
 templates\rules\00-project.md    паспорт проекта: стек, команды, риск-домены
 templates\verify-checklist.md    проверка до/после правки
 templates\workflows\             7 процедур для .clinerules/workflows
-templates\cline_docs\            Memory Bank проекта (5 файлов)
+templates\cline_docs\            Memory Bank проекта (7 файлов)
 docs\AGENTS-workflow.md          механика журналов, чекпойнт, гейт
 docs\AGENTS-cline-setup.md       Compact Prompt, лимиты 14B, Confidence Check
 evals\tasks.json                 10 задач с бинарным критерием
