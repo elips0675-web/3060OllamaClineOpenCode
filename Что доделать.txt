@@ -33,8 +33,13 @@
 (`Test-Path` = False). То есть до проверки Tab нужен ещё и шаг установки:
 поставить расширение Continue и создать `config.yaml` из
 `06-Continue-автодополнение.yaml`.
+Сделано 01.11.2026: `code --install-extension continue.continue --force` ->
+`continue.continue-2.0.0-win32-x64` в `~/.vscode/extensions`, конфиг скопирован
+в `~/.continue/config.yaml` (1410 байт, `swiftmatch-coder-tiny` с
+`contextLength: 4096`). Осталось человеку: открыть VS Code, дождаться
+индексации и проверить Tab и `debounceDelay`.
 
-Статус: ⏳ (проверено 01.11.2026) (blocked: расширение Continue не установлено; Tab и debounce — VS Code и человек)
+Статус: ⏳ (проверено 01.11.2026) (blocked: Continue поставлен и настроен; Tab и debounce проверяются только в VS Code человеком)
 
 ## 🟡 Маршрут «локально / облако» (P1)
 
@@ -68,8 +73,10 @@ agents/config/heap-dump/paths), это только интерактивная �
 из BLK-02 валидны, иначе `/next` не существовал бы.
 Не проверено: строка `model:` не применилась — в `run` обе пробы
 (`ollama/swiftmatch-coder-7b-q5`, `opencode/deepseek-v4.1-flash-free`) шли на
-модели по умолчанию `flint-40b-free`. Применяется ли `model` в TUI и печатает
-ли `/next` карточку — по-прежнему интерактивная проверка.
+модели по умолчанию `flint-40b-free`. По документации (`opencode.ai/docs/
+commands`, раздел «Model») `model` — опциональный ключ команды TUI, то есть
+в TUI он должен применяться; `run` его игнорирует. Печатает ли `/next`
+карточку — по-прежнему интерактивная проверка.
 
 Статус: ⏳ (проверено 01.11.2026) (blocked: резолв команд подтверждён, строка `model:` в `run` не применяется; TUI — интерактивная проверка)
 
