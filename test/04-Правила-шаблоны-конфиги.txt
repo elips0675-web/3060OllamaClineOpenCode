@@ -7,7 +7,7 @@
 Состав (29 файлов, порядок = порядок в файле):
    1. .clinerules — 17999 байт, 221 строк
    2. AGENTS.md — 5113 байт, 90 строк
-   3. switch-ai.bat — 602 байт, 18 строк
+   3. switch-ai.bat — 610 байт, 18 строк
    4. package.json — 2323 байт, 43 строк
    5. models/Modelfile-14b-q4 — 402 байт, 11 строк
    6. models/Modelfile-14b-q6 — 409 байт, 11 строк
@@ -359,14 +359,14 @@ npm.cmd run retent:check
 ~31.8 ток/с. Замер: `03-Замер-скорости.bat`.
 
 ================================================================================
-ФАЙЛ: switch-ai.bat  (602 байт, 18 строк)
+ФАЙЛ: switch-ai.bat  (610 байт, 18 строк)
 ================================================================================
 
 @echo off
 chcp 65001 >nul
 setlocal
 rem Switch Cline/OpenCode profiles. Run from the PROJECT root, not from this folder.
-rem Profiles: local, local7, local-q5, local14-hq, cloud, cloud-ollama, status
+rem Profiles: local, local7, local-q5, local14-hq, cloud, cloud-ollama, status, verify
 set "SCRIPT=%~dp0scripts\ai-profile.mjs"
 
 where node >nul 2>nul
