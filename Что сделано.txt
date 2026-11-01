@@ -2,6 +2,37 @@
 Дата среза: 01.11.2026. Новые записи — сверху.
 
 ================================================================================
+01.11.2026. BLK-05: настройки Tab в config.yaml лежали в ключе, которого нет в схеме
+================================================================================
+
+- Сверено с `config-yaml-schema.json`, который везёт само расширение
+  (`~/.vscode/extensions/continue.continue-2.0.0-win32-x64/config-yaml-schema.json`):
+  верхний уровень `ConfigYaml` — только `name, version, schema, metadata, env,
+  requestOptions, models, context, data, mcpServers, rules, prompts, docs`.
+  Ключа `tabAutocompleteOptions` там нет (это поле `config.json`), а
+  `multilineCompletions` нет и в схеме модели.
+- Правильное место: `models[].autocompleteOptions` —
+  `debounceDelay`, `maxPromptTokens`, `maxSuffixPercentage`,
+  `prefixPercentage`, `modelTimeout`, `disable`, `useCache` и т.п.
+  Рантайм складывает их так:
+  `{...DEFAULT_AUTOCOMPLETE_OPTS, ...config.tabAutocompleteOptions, ...llm.autocompleteOptions}`
+  (`out/extension.js`), то есть пер-модельные значения читаются точно.
+- Правка: в `06-Continue-автодополнение.yaml` блок `tabAutocompleteOptions`
+  убран, `debounceDelay: 300` и `maxPromptTokens: 2048` переехали в
+  `autocompleteOptions` модели `swiftmatch-coder-tiny`; `multilineCompletions`
+  выброшен — в схеме такого поля нет (это настройка IDE, не yaml). Живой
+  `%USERPROFILE%\.continue\config.yaml` перезаписан из файла комплекта, старая
+  копия — `config.yaml.bak-01.11.2026-autocompleteOptions`.
+- Проверка (`tmp/blk05-config-validate.mjs`, свой минимальный разбор YAML):
+  оба файла разбираются, верхний уровень = `name, version, schema, models,
+  context, docs`, у модели автодополнения `autocompleteOptions =
+  {"debounceDelay":300,"maxPromptTokens":2048}`, роли из enum, ошибок 0.
+- Оговорка: полноценного YAML-парсера в комплекте нет (`yaml`/`js-yaml` не
+  установлены), разбор в проверке упрощённый — для этого файла его достаточно.
+- Не проверено: сама подсказка Tab — VS Code, запущенный до правки, держит
+  старый конфиг, нужен `Developer: Reload Window` и человек.
+- Счётчики не менялись: 338 проверок / 12 файловых наборов.
+================================================================================
 01.11.2026. RUN-04: model из команды применяется на маршруте TUI
 ================================================================================
 

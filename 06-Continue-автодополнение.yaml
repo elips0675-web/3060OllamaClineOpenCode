@@ -24,6 +24,12 @@ models:
     defaultCompletionOptions:
       contextLength: 4096
       maxTokens: 128
+    # настройки Tab живут у самой модели автодополнения: схема config.yaml
+    # (config-yaml-schema.json расширения) знает только autocompleteOptions,
+    # отдельного верхнего tabAutocompleteOptions в yaml нет
+    autocompleteOptions:
+      debounceDelay: 300
+      maxPromptTokens: 2048
 
   - name: Qwen2.5-Coder 7B (замена 14B, только когда 14B выгружен)
     provider: ollama
@@ -45,10 +51,9 @@ context:
   - provider: terminal
   - provider: problems
 
-tabAutocompleteOptions:
-  debounceDelay: 300
-  maxPromptTokens: 2048
-  multilineCompletions: auto
+# multiline-подсказки в схеме config.yaml отсутствуют: это настройка IDE
+# (Continue → Settings → Tab Autocomplete), а не поле конфига. Не дописываем
+# сюда ключ, которого схема не знает.
 
 docs:
   - name: Правила проекта

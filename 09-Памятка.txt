@@ -107,6 +107,9 @@
                            opencode (команды читаются при старте)
   Cline игнорирует фразу .. .clinerules не в корне проекта
   Continue молчит ......... нет swiftmatch-coder-tiny или файл назван .yml
+                            (настройки Tab — внутри модели с ролью autocomplete,
+                            ключ autocompleteOptions; верхнего tabAutocompleteOptions
+                            в схеме config.yaml нет)
   npm не стартует ......... PowerShell: npm.cmd, или открыть cmd
 
 ОРИЕНТИРЫ 3060

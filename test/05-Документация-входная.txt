@@ -12,7 +12,7 @@
    5. 03-Замер-скорости.bat — 2320 байт, 58 строк
    6. 04-Оффлайн-подготовка.txt — 10215 байт, 159 строк
    7. 05-Облако-и-DeepSeek.txt — 14599 байт, 204 строк
-   8. 06-Continue-автодополнение.yaml — 1355 байт, 56 строк
+   8. 06-Continue-автодополнение.yaml — 1919 байт, 61 строк
    9. 07-Автовыбор-задач.txt — 17680 байт, 227 строк
   10. 08-Куда-писать-команды.txt — 31747 байт, 461 строк
 
@@ -1581,7 +1581,7 @@ UUID, телефоны и ключи в логе не нужны ни одной
 ================================================================================
 
 ================================================================================
-ФАЙЛ: 06-Continue-автодополнение.yaml  (1355 байт, 56 строк)
+ФАЙЛ: 06-Continue-автодополнение.yaml  (1919 байт, 61 строк)
 ================================================================================
 
 name: swiftmatch-local
@@ -1610,6 +1610,12 @@ models:
     defaultCompletionOptions:
       contextLength: 4096
       maxTokens: 128
+    # настройки Tab живут у самой модели автодополнения: схема config.yaml
+    # (config-yaml-schema.json расширения) знает только autocompleteOptions,
+    # отдельного верхнего tabAutocompleteOptions в yaml нет
+    autocompleteOptions:
+      debounceDelay: 300
+      maxPromptTokens: 2048
 
   - name: Qwen2.5-Coder 7B (замена 14B, только когда 14B выгружен)
     provider: ollama
@@ -1631,10 +1637,9 @@ context:
   - provider: terminal
   - provider: problems
 
-tabAutocompleteOptions:
-  debounceDelay: 300
-  maxPromptTokens: 2048
-  multilineCompletions: auto
+# multiline-подсказки в схеме config.yaml отсутствуют: это настройка IDE
+# (Continue → Settings → Tab Autocomplete), а не поле конфига. Не дописываем
+# сюда ключ, которого схема не знает.
 
 docs:
   - name: Правила проекта

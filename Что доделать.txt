@@ -36,10 +36,28 @@
 Сделано 01.11.2026: `code --install-extension continue.continue --force` ->
 `continue.continue-2.0.0-win32-x64` в `~/.vscode/extensions`, конфиг скопирован
 в `~/.continue/config.yaml` (1410 байт, `swiftmatch-coder-tiny` с
-`contextLength: 4096`). Осталось человеку: открыть VS Code, дождаться
-индексации и проверить Tab и `debounceDelay`.
+`contextLength: 4096`).
 
-Статус: ⏳ (проверено 01.11.2026) (blocked: Continue поставлен и настроен; Tab и debounce проверяются только в VS Code человеком)
+Факт (01.11.2026, сборка 2.0.0 против схемы расширения): в конфиге был
+невалидный ключ. `config-yaml-schema.json` из
+`~/.vscode/extensions/continue.continue-2.0.0-win32-x64/` описывает верхний
+уровень как `name, version, schema, metadata, env, requestOptions, models,
+context, data, mcpServers, rules, prompts, docs` — `tabAutocompleteOptions`
+там нет, это поле `config.json`; `multilineCompletions` нет и в схеме модели.
+Настройки Tab по схеме живут в `models[].autocompleteOptions`
+(`debounceDelay`, `maxPromptTokens` и др.), и рантайм их читает:
+`{...DEFAULT_AUTOCOMPLETE_OPTS, ...config.tabAutocompleteOptions,
+...llm.autocompleteOptions}` (`out/extension.js`). Исправлено: блок
+`tabAutocompleteOptions` убран, `debounceDelay: 300` и `maxPromptTokens: 2048`
+перенесены в `autocompleteOptions` модели `swiftmatch-coder-tiny`,
+`multilineCompletions` выброшен (настройка IDE, не yaml). Живой конфиг
+перезаписан, копия — `config.yaml.bak-01.11.2026-autocompleteOptions`.
+Проверка обоих файлов (`tmp/blk05-config-validate.mjs`): ошибок 0.
+Оговорка: YAML разбирался упрощённым парсером — `yaml`/`js-yaml` в комплекте нет.
+Не проверено: подсказка Tab; VS Code запущен до правки, нужен
+`Developer: Reload Window` и человек.
+
+Статус: ⏳ (проверено 01.11.2026) (blocked: Continue поставлен, конфиг приведён к схеме расширения; Tab и debounce проверяются только в VS Code человеком после Reload Window)
 
 ## 🟡 Маршрут «локально / облако» (P1)
 
