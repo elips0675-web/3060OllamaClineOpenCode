@@ -42,6 +42,12 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
   На 3060 12 ГБ каждый лишний килобайт контекста — это KV-кэш в той же VRAM,
   а для карточки в 5 КБ и правки одного файла 12288 хватает с запасом.
 
+  PARAMETER stop в Modelfile не нужен: шаблон Qwen2.5-Coder сам оканчивает
+  ответ на <|im_end|>, и Ollama возвращает done_reason=stop с чистым хвостом
+  (проверено 01.11.2026: chat, generate, XML <action>, код, JSON — хвоста нет).
+  Мусор после ответа появляется только при raw: true — там шаблон обойдён, и
+  тогда stop передаётся в самом запросе (options.stop), а не в сборке.
+
   Проверка после установки (обязательна):
       ollama show swiftmatch-coder-14b --modelfile | findstr num_ctx
       ожидается: PARAMETER num_ctx 12288
