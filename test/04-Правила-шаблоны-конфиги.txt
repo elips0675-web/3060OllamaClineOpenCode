@@ -8,7 +8,7 @@
    1. .clinerules — 15580 байт, 192 строк
    2. AGENTS.md — 3904 байт, 74 строк
    3. switch-ai.bat — 602 байт, 18 строк
-   4. package.json — 1917 байт, 37 строк
+   4. package.json — 2044 байт, 39 строк
    5. models/Modelfile-14b-q4 — 402 байт, 11 строк
    6. models/Modelfile-14b-q6 — 409 байт, 11 строк
    7. models/Modelfile-7b-q5 — 541 байт, 12 строк
@@ -336,7 +336,7 @@ node --no-warnings "%SCRIPT%" %*
 endlocal
 
 ================================================================================
-ФАЙЛ: package.json  (1917 байт, 37 строк)
+ФАЙЛ: package.json  (2044 байт, 39 строк)
 ================================================================================
 
 {
@@ -346,7 +346,7 @@ endlocal
   "type": "module",
   "description": "Offline coding-agent kit for RTX 3060: task selection, local/cloud switching and route (snapshot of SwiftMatch scripts)",
   "scripts": {
-    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs",
+    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs scripts/symbols.test.mjs",
     "test:retent": "vitest run scripts/retention-gate.test.mjs",
     "test:section": "vitest run scripts/stage-section.test.mjs",
     "stage:section": "node scripts/stage-section.mjs",
@@ -357,6 +357,8 @@ endlocal
     "test:eval": "vitest run scripts/agent-eval.test.mjs",
     "test:live": "vitest run scripts/agent-live.test.mjs",
     "test:init": "vitest run scripts/init-project.test.mjs",
+    "test:symbols": "vitest run scripts/symbols.test.mjs",
+    "symbols": "node scripts/symbols.mjs",
     "init:project": "node scripts/init-project.mjs",
     "check:backlog": "node scripts/backlog.mjs check",
     "docs:map": "node scripts/doc-map.mjs",
