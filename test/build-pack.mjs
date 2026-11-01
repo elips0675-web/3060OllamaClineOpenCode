@@ -18,6 +18,7 @@ const MORE_CODE = [
 ];
 const RULES = [
   '.clinerules',
+  'AGENTS.md',
   'switch-ai.bat',
   'package.json',
   'models/Modelfile-14b-q4',
@@ -211,8 +212,8 @@ results.push(
 function backlogCounts() {
   const text = read('Что доделать.txt');
   const open = text.split('\n').filter((line) => /^### [A-Z]/u.test(line)).length;
-  const closed = text.split('\n').filter((line) => /^## ✅ /u.test(line)).length;
-  return { open, closed };
+  const legacyClosed = text.split('\n').filter((line) => /^## ✅ /u.test(line)).length;
+  return { open, legacyClosed };
 }
 
 const counts = backlogCounts();
@@ -233,9 +234,9 @@ results.push(
   build({
     file: '08-Что-доделать.txt',
     title: 'ЧТО ДОДЕЛАТЬ: открытые пункты бэклога комплекта (снимок)',
-    purpose: `актуальная очередь: ${counts.open} открытых пунктов с ID, фактами и статусами, плюс ${counts.closed} закрытых строк и правила ведения бэклога.`,
+    purpose: `актуальная очередь: ${counts.open} открытых пунктов с ID, фактами и статусами, плюс правила ведения бэклога. Закрытые сюда не входят: единственная запись о закрытии — в журнале (файл 09).`,
     note:
-      'статусы: ⏳ (проверено ДД.ММ.ГГГГ) — открыто; (blocked: …) — ждёт внешнего; (watch: …) — отложено осознанно; ✅ — закрыто.',
+      'статусы: ⏳ (проверено ДД.ММ.ГГГГ) — открыто; (blocked: …) — ждёт внешнего; (watch: …) — отложено осознанно. Строк «## ✅ … — ЗАКРЫТО» в бэклоге нет; гейт считает их нарушением.',
     files: ['Что доделать.txt'],
   }),
 );

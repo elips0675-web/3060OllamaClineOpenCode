@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
   auditBacklog,
-  auditChronicle,
+  auditJournalEntry,
   closeItem,
   openItem,
   parseArgs,
@@ -18,8 +18,6 @@ const BACKLOG = [
   '# Что доделать — тест',
   '',
   '---',
-  '',
-  '## ✅ Старое',
   '',
   '## 🟡 Открытые (P1)',
   '',
@@ -42,6 +40,7 @@ describe('аудит бэклога', () => {
     const audit = auditBacklog(BACKLOG)
     expect(audit.problems).toEqual([])
     expect(audit.openIds).toEqual(['BLK-01', 'BLK-02'])
+    expect(audit.legacyClosed).toEqual([])
   })
 
   it('требует строку статуса и дату', () => {
@@ -63,39 +62,39 @@ describe('аудит бэклога', () => {
     expect(auditBacklog(dupHeading).problems.join('\n')).toMatch(/дублируется/)
   })
 
-  it('запрещает тело под закрытой записью', () => {
+  it('отвергает устаревшую закрытую строку в бэклоге', () => {
     const text = BACKLOG.replace(
-      '## ✅ Старое',
-      '## ✅ BLK-03 — Старое (см. «Что сделано.txt»: разд. 1) — ЗАКРЫТО 29.10.2026\n\nподробности под строкой',
+      '## 🟡 Открытые (P1)',
+      '## ✅ BLK-03 — Старое — ЗАКРЫТО 29.10.2026\n\n## 🟡 Открытые (P1)',
     )
-    const problems = auditBacklog(text).problems.join('\n')
-    expect(problems).toMatch(/надгробие/)
-    expect(auditBacklog(text).closedDates).toEqual(['29.10.2026'])
+    const audit = auditBacklog(text)
+    expect(audit.problems.join('\n')).toMatch(/устаревший формат/)
+    expect(audit.problems.join('\n')).toMatch(/удаляется/)
+    expect(audit.legacyClosed).toHaveLength(1)
   })
 
-  it('сверяет даты закрытия с журналом', () => {
-    const audit = auditBacklog(
-      BACKLOG.replace('## ✅ Старое', '## ✅ BLK-03 — Старое — ЗАКРЫТО 29.10.2026'),
-    )
-    expect(auditChronicle(audit.closedDates, 'журнал за 29.10.2026')).toEqual([])
-    expect(auditChronicle(audit.closedDates, 'журнал без даты').join('\n')).toMatch(
-      /закрытие без развёрнутой записи/,
-    )
+  it('требует в журнале и ID, и дату', () => {
+    expect(auditJournalEntry('BLK-01', '30.10.2026', '30.10.2026. BLK-01 — запись')).toEqual([])
+    expect(
+      auditJournalEntry('BLK-01', '30.10.2026', 'журнал без даты BLK-01').join('\n'),
+    ).toMatch(/даты 30\.10\.2026/)
+    expect(
+      auditJournalEntry('BLK-01', '30.10.2026', '30.10.2026 без нужного ID').join('\n'),
+    ).toMatch(/ID «BLK-01»/)
   })
 })
 
 describe('закрытие и открытие', () => {
-  it('закрывает пункт одной строкой и убирает тело', () => {
-    const next = closeItem(BACKLOG, {
-      id: 'BLK-01',
-      date: '30.10.2026',
-      ref: 'раздел «BLK-01»',
-    })
-    expect(next).not.toContain('### BLK-01')
-    expect(next).not.toContain('02-Установить-локально.bat')
-    expect(next).toContain(
-      '## ✅ BLK-01 — Установить модели (см. «Что сделано.txt»: раздел «BLK-01») — ЗАКРЫТО 30.10.2026',
+  it('закрывает пункт удалением секции, без строки ✅', () => {
+    const next = closeItem(
+      BACKLOG,
+      { id: 'BLK-01', date: '30.10.2026', ref: 'раздел «BLK-01»' },
+      { doneText: '30.10.2026. BLK-01 — запись журнала' },
     )
+    expect(next).not.toContain('BLK-01')
+    expect(next).not.toContain('02-Установить-локально.bat')
+    expect(next).not.toContain('✅')
+    expect(next).toContain('### BLK-02 — Проверить ID')
     expect(auditBacklog(next).problems).toEqual([])
   })
 
@@ -103,11 +102,19 @@ describe('закрытие и открытие', () => {
     expect(() =>
       closeItem(BACKLOG, { id: 'BLK-01', date: '30.10.2026' }, { doneText: 'без даты' }),
     ).toThrow(/сначала развёрнутая запись/)
-    expect(() => closeItem(BACKLOG, { id: 'NOPE-01', date: '30.10.2026' })).toThrow(
-      /не найден/,
-    )
-    expect(() => closeItem(BACKLOG, { id: 'bad', date: '30.10.2026' })).toThrow(/PREFIX-NN/)
-    expect(() => closeItem(BACKLOG, { id: 'BLK-01', date: '2026-10-30' })).toThrow(/ДД\.ММ\.ГГГГ/)
+    expect(() =>
+      closeItem(BACKLOG, { id: 'BLK-01', date: '30.10.2026' }, { doneText: '30.10.2026 без ID' }),
+    ).toThrow(/ID «BLK-01»/)
+    expect(() => closeItem(BACKLOG, { id: 'BLK-01', date: '30.10.2026' })).toThrow(/журнал/)
+    expect(() =>
+      closeItem(BACKLOG, { id: 'NOPE-01', date: '30.10.2026' }, { doneText: '30.10.2026 NOPE-01' }),
+    ).toThrow(/не найден/)
+    expect(() =>
+      closeItem(BACKLOG, { id: 'bad', date: '30.10.2026' }, { doneText: '30.10.2026' }),
+    ).toThrow(/PREFIX-NN/)
+    expect(() =>
+      closeItem(BACKLOG, { id: 'BLK-01', date: '2026-10-30' }, { doneText: '2026-10-30' }),
+    ).toThrow(/ДД\.ММ\.ГГГГ/)
   })
 
   it('добавляет открытый пункт перед правилами, а не после', () => {
@@ -127,6 +134,14 @@ describe('закрытие и открытие', () => {
     expect(() => openItem(BACKLOG, { id: 'BLK-01', title: 'Дубль' })).toThrow(/уже занят/)
     expect(() => openItem(BACKLOG, { id: 'DOC-01', title: '  ' })).toThrow(/title/)
     expect(() => openItem(BACKLOG, { id: 'X', title: 'x' })).toThrow(/PREFIX-NN/)
+  })
+
+  it('не переиспользует ID из устаревшей закрытой строки', () => {
+    const text = BACKLOG.replace(
+      '## 🟡 Открытые (P1)',
+      '## ✅ DOC-09 — Старое — ЗАКРЫТО 29.10.2026\n\n## 🟡 Открытые (P1)',
+    )
+    expect(() => openItem(text, { id: 'DOC-09', title: 'Снова' })).toThrow(/уже занят/)
   })
 
   it('сохраняет CRLF, если файл был в CRLF', () => {
@@ -174,6 +189,8 @@ describe('CLI', () => {
   it('check отдаёт 0 на корректном бэклоге', () => {
     const result = run(['check', '--file', backlogFile, '--done', doneFile])
     expect(result.status).toBe(0)
+    expect(result.stdout).toContain('открытых 2')
+    expect(result.stdout).toContain('устаревших закрытых строк 0')
     expect(result.stdout).toContain('канон бэклога соблюдён')
   })
 
@@ -184,7 +201,18 @@ describe('CLI', () => {
     expect(result.stderr).toMatch(/нет строки «Статус/)
   })
 
-  it('close закрывает и пишет файл', () => {
+  it('check отдаёт 1, если осталась строка ✅', () => {
+    writeFileSync(
+      backlogFile,
+      BACKLOG.replace('## 🟡 Открытые (P1)', '## ✅ BLK-03 — Старое — ЗАКРЫТО 29.10.2026\n\n## 🟡 Открытые (P1)'),
+      'utf8',
+    )
+    const result = run(['check', '--file', backlogFile, '--done', doneFile])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toMatch(/устаревший формат/)
+  })
+
+  it('close удаляет пункт и не пишет ✅', () => {
     const result = run([
       'close',
       '--id',
@@ -198,10 +226,27 @@ describe('CLI', () => {
       '--done',
       doneFile,
     ])
-    expect(result.status).toBe(0)
+    expect(result.status).toBe(1) // в журнале нет ID BLK-01
+    expect(result.stderr).toMatch(/ID «BLK-01»/)
+
+    writeFileSync(doneFile, '30.10.2026. BLK-01 — запись журнала', 'utf8')
+    const ok = run([
+      'close',
+      '--id',
+      'BLK-01',
+      '--ref',
+      'разд. 1',
+      '--date',
+      '30.10.2026',
+      '--file',
+      backlogFile,
+      '--done',
+      doneFile,
+    ])
+    expect(ok.status).toBe(0)
     const text = readFileSync(backlogFile, 'utf8')
-    expect(text).toContain('ЗАКРЫТО 30.10.2026')
-    expect(text).not.toContain('### BLK-01')
+    expect(text).not.toContain('BLK-01')
+    expect(text).not.toContain('✅')
   })
 
   it('close отдаёт 1, если даты нет в журнале', () => {

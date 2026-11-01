@@ -1,20 +1,19 @@
 // Механизм «Что доделать.txt» ↔ «Что сделано.txt» (взят из проекта SwiftMatch).
 //
 // Идея: бэклог — только ОТКРЫТЫЕ вопросы с ID и датой проверки. Закрытый пункт
-// уходит в журнал «Что сделано.txt» развёрнутой записью, а в бэклоге остаётся
-// одна компактная строка ✅ со ссылкой. Тело под закрытой строкой — «надгробие»,
-// это FAIL. Дата «ЗАКРЫТО ДД.ММ.ГГГГ» обязана встречаться в журнале.
+// УДАЛЯЕТСЯ из бэклога; единственная запись о закрытии — развёрнутый раздел в
+// «Что сделано.txt». Строк «## ✅ … — ЗАКРЫТО» здесь быть не должно: это
+// устаревший формат, и гейт считает его нарушением.
 //
 // Формы записей:
 //   открытая:  ### BLK-01 — Заголовок
 //               Факт: … `file:line`
 //               Статус: ⏳ (проверено 30.10.2026)
-//   закрытая:  ## ✅ BLK-01 — Заголовок (см. «Что сделано.txt»: ref) — ЗАКРЫТО 30.10.2026
-//               (тела быть не должно)
+//   закрытая:  отсутствует в бэклоге (удалена); запись — в журнале.
 //
 // Использование:
 //   node scripts/backlog.mjs check
-//   node scripts/backlog.mjs close --id AI-02 --ref "раздел …" [--date 30.10.2026]
+//   node scripts/backlog.mjs close --id AI-02 [--date 30.10.2026] [--ref "…"]
 //   node scripts/backlog.mjs open --id DOC-02 --title "…" [--body "…"] [--date 30.10.2026]
 //
 // Коды выхода: 0 — готово, 1 — нарушение канона/записи, 2 — ошибка аргументов.
@@ -30,14 +29,11 @@ export const DEFAULT_DONE = path.join(KIT_ROOT, 'Что сделано.txt')
 const ID_SRC = '[A-Z][A-Z0-9]{1,7}-\\d{2}'
 export const ITEM_ID_RE = new RegExp(`\\b(${ID_SRC})\\b`, 'u')
 export const OPEN_HEADING_RE = new RegExp(`^###\\s+(${ID_SRC})\\s*[—:-]\\s*(.+)$`, 'u')
-export const CLOSED_HEADING_RE = new RegExp(
-  `^##\\s+✅\\s+(${ID_SRC})\\b(.*?)—\\s*ЗАКРЫТО\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s*$`,
-  'u',
-)
+/** Устаревший формат: закрытая строка осталась в бэклоге. */
+export const LEGACY_CLOSED_RE = /^##\s+✅/u
 export const VERIFIED_RE = /\(проверено\s+\d{2}\.\d{2}\.\d{4}\)/u
 const STATUS_RE = /^Статус:\s*(.+)$/mu
 const HEADING_RE = /^#{1,6}\s+/u
-const HR_RE = /^---+\s*$/u
 const DATE_RE = /^\d{2}\.\d{2}\.\d{4}$/u
 
 export const today = (now = new Date()) =>
@@ -54,18 +50,18 @@ function sectionBody(lines, start) {
 
 /**
  * Структурный аудит бэклога:
- *   - ID уникален и в открытых, и в закрытых;
+ *   - открытый ID уникален;
  *   - у открытого пункта есть «Статус: ⏳ (проверено ДД.ММ.ГГГГ)»;
- *   - закрытая строка заканчивается «— ЗАКРЫТО ДД.ММ.ГГГГ» и не имеет тела;
+ *   - закрытых строк «## ✅ … — ЗАКРЫТО» нет: закрытие живёт только в журнале;
  *   - заголовки не дублируются по базе (до «(»).
- * Возвращает { problems, openIds, closedDates }.
+ * Возвращает { problems, openIds, legacyClosed }.
  */
 export function auditBacklog(text) {
   const lines = text.split(/\r?\n/u)
   const problems = []
   const seen = new Map()
   const openIds = []
-  const closedDates = []
+  const legacyClosed = []
   const headingBase = new Map()
 
   const remember = (id, line) => {
@@ -96,6 +92,15 @@ export function auditBacklog(text) {
       }
     }
 
+    if (LEGACY_CLOSED_RE.test(line)) {
+      legacyClosed.push(i + 1)
+      problems.push(
+        `строка ${i + 1}: закрытая строка в бэклоге — устаревший формат; ` +
+          'закрытый пункт удаляется, запись остаётся только в «Что сделано.txt»',
+      )
+      continue
+    }
+
     const open = OPEN_HEADING_RE.exec(line)
     if (open) {
       const [, id, title] = open
@@ -111,37 +116,24 @@ export function auditBacklog(text) {
       } else if (!VERIFIED_RE.test(status[1])) {
         problems.push(`строка ${i + 1} (${id}): нет даты «(проверено ДД.ММ.ГГГГ)»`)
       }
-      continue
-    }
-
-    const closed = CLOSED_HEADING_RE.exec(line)
-    if (closed) {
-      const [, id, , date] = closed
-      remember(id, i)
-      closedDates.push(date)
-      const { body } = sectionBody(lines, i)
-      for (let j = 0; j < body.length; j += 1) {
-        const textRow = body[j].trim()
-        if (textRow === '' || HR_RE.test(textRow)) continue
-        problems.push(
-          `строка ${i + j + 2} (${id}): тело под закрытой записью — «надгробие»; детали переносить в «Что сделано.txt»`,
-        )
-      }
     }
   }
 
-  return { problems, openIds, closedDates }
+  return { problems, openIds, legacyClosed }
 }
 
-/** Каждая дата «ЗАКРЫТО ДД.ММ.ГГГГ» обязана встречаться в журнале. */
-export function auditChronicle(closedDates, doneText) {
+/**
+ * Закрытие фиксируется только в журнале: там обязаны быть и ID пункта, и дата.
+ * Возвращает список проблем (пустой — запись есть).
+ */
+export function auditJournalEntry(id, date, doneText) {
   const problems = []
-  for (const date of new Set(closedDates)) {
-    if (!doneText.includes(date)) {
-      problems.push(
-        `дата «ЗАКРЫТО ${date}» отсутствует в «Что сделано.txt» — закрытие без развёрнутой записи`,
-      )
-    }
+  const text = String(doneText || '')
+  if (!text.includes(date)) {
+    problems.push(`даты ${date} нет в «Что сделано.txt» — сначала развёрнутая запись`)
+  }
+  if (!new RegExp(`\\b${id}\\b`, 'u').test(text)) {
+    problems.push(`ID «${id}» не найден в «Что сделано.txt» — запись о закрытии без самого пункта`)
   }
   return problems
 }
@@ -159,40 +151,33 @@ function assertDate(date) {
 }
 
 /**
- * Закрыть открытый пункт: убрать секцию, вставить компактную строку ✅ после
- * первого `---`. Отказывается, если даты нет в журнале (сначала запись в
- * «Что сделано.txt»), если пункт не найден или результат ломает канон.
+ * Закрыть открытый пункт: удалить его секцию целиком. Ничего не дописывает:
+ * единственная запись о закрытии — в «Что сделано.txt» (проверяются ID и дата).
+ * Отказывается, если записи нет, пункт не найден или результат ломает канон.
  */
 export function closeItem(text, { id, date = today(), ref = '' }, { doneText } = {}) {
   assertId(id)
   assertDate(date)
-  if (doneText !== undefined && !doneText.includes(date)) {
-    throw new Error(`даты ${date} нет в «Что сделано.txt»: сначала развёрнутая запись, потом закрытие`)
+  if (doneText === undefined) {
+    throw new Error('нужен журнал «Что сделано.txt»: закрытие фиксируется только там')
   }
+  const journal = auditJournalEntry(id, date, doneText)
+  if (journal.length > 0) throw new Error(journal.join('; '))
 
   const eol = eolOf(text)
   const lines = text.split(/\r?\n/u)
   let start = -1
-  let title = ''
   for (let i = 0; i < lines.length; i += 1) {
     const match = OPEN_HEADING_RE.exec(lines[i])
     if (match && match[1] === id) {
       start = i
-      title = match[2].trim()
       break
     }
   }
   if (start === -1) throw new Error(`открытый пункт «${id}» не найден`)
 
   const { end } = sectionBody(lines, start)
-  const refPart = ref ? ` (см. «Что сделано.txt»: ${ref})` : ' (см. «Что сделано.txt»)'
-  const compact = `## ✅ ${id} — ${title}${refPart} — ЗАКРЫТО ${date}`
-
   const rest = [...lines.slice(0, start), ...lines.slice(end)]
-  let hr = rest.findIndex((row) => HR_RE.test(row))
-  if (hr === -1) rest.unshift(compact, '')
-  else rest.splice(hr + 1, 0, '', compact)
-
   const next = rest.join(eol)
   const { problems } = auditBacklog(next)
   if (problems.length > 0) {
@@ -208,14 +193,14 @@ export function openItem(text, { id, title, body = '', date = today() }, { doneT
   if (!String(title || '').trim()) throw new Error('--title обязателен')
 
   const { problems } = auditBacklog(text)
-  const busy =
-    problems.some((problem) => problem.includes(`«${id}»`)) ||
-    text.split(/\r?\n/u).some((row) => {
-      const open = OPEN_HEADING_RE.exec(row)
-      const closed = CLOSED_HEADING_RE.exec(row)
-      return (open && open[1] === id) || (closed && closed[1] === id)
-    })
-  if (busy) throw new Error(`ID «${id}» уже занят`)
+  const busy = text.split(/\r?\n/u).some((row) => {
+    if (!/^#{2,3}\s+/u.test(row)) return false
+    const match = ITEM_ID_RE.exec(row)
+    return Boolean(match) && match[1] === id
+  })
+  if (busy || problems.some((problem) => problem.includes(`«${id}»`))) {
+    throw new Error(`ID «${id}» уже занят`)
+  }
 
   const eol = eolOf(text)
   const trimmed = String(body || '').trim()
@@ -233,10 +218,6 @@ export function openItem(text, { id, title, body = '', date = today() }, { doneT
   const audit = auditBacklog(next)
   if (audit.problems.length > 0) {
     throw new Error(`результат ломает канон: ${audit.problems.join('; ')}`)
-  }
-  if (doneText !== undefined) {
-    const chronicle = auditChronicle(audit.closedDates, doneText)
-    if (chronicle.length > 0) throw new Error(chronicle.join('; '))
   }
   return next
 }
@@ -268,7 +249,8 @@ function usage() {
   node scripts/backlog.mjs open  --id <PREFIX-NN> --title "<заголовок>" [--body "<текст>"] [--date ДД.ММ.ГГГГ] [--dry-run]
 
 Открытый пункт: ### ID — заголовок + «Статус: ⏳ (проверено ДД.ММ.ГГГГ)».
-Закрытый: одна строка «## ✅ ID — … — ЗАКРЫТО ДД.ММ.ГГГГ», без тела.
+Закрытый пункт из бэклога удаляется; запись о закрытии — только в журнале,
+где обязаны быть и ID, и дата. Строк «## ✅ … — ЗАКРЫТО» в бэклоге быть не должно.
 `
 }
 
@@ -304,9 +286,10 @@ function main(argv) {
   try {
     if (args.mode === 'check') {
       const audit = auditBacklog(text)
-      const problems = [...audit.problems, ...auditChronicle(audit.closedDates, doneText)]
+      const problems = audit.problems
       console.log(
-        `Бэклог: открытых ${audit.openIds.length}, закрытых ${audit.closedDates.length}, ` +
+        `Бэклог: открытых ${audit.openIds.length}, ` +
+          `устаревших закрытых строк ${audit.legacyClosed.length}, ` +
           `строк ${text.split(/\r?\n/u).length}`,
       )
       if (problems.length > 0) {
@@ -325,7 +308,10 @@ function main(argv) {
         { doneText },
       )
       if (!dryRun) writeFileSync(file, next, 'utf8')
-      console.log(`✓ закрыт пункт ${args.values.id}${dryRun ? ' (dry-run, файл не изменён)' : ''}`)
+      console.log(
+        `✓ закрыт пункт ${args.values.id}: удалён из бэклога` +
+          `${dryRun ? ' (dry-run, файл не изменён)' : ', запись осталась в журнале'}`,
+      )
       return 0
     }
 

@@ -18,6 +18,8 @@
     "test:init": "vitest run scripts/init-project.test.mjs",
     "init:project": "node scripts/init-project.mjs",
     "check:backlog": "node scripts/backlog.mjs check",
+    "docs:map": "node scripts/doc-map.mjs",
+    "docs:check": "node scripts/doc-map.mjs --check",
     "retent:check": "node scripts/retention-gate.mjs",
     "retent:check:preflight": "node scripts/retention-gate.mjs --preflight",
     "backlog:open": "node scripts/backlog.mjs open",
