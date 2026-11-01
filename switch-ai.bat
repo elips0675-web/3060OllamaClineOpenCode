@@ -2,7 +2,7 @@
 chcp 65001 >nul
 setlocal
 rem Switch Cline/OpenCode profiles. Run from the PROJECT root, not from this folder.
-rem Profiles: local, local7, local-q5, local14-hq, cloud, cloud-ollama, status
+rem Profiles: local, local7, local-q5, local14-hq, cloud, cloud-ollama, status, verify
 set "SCRIPT=%~dp0scripts\ai-profile.mjs"
 
 where node >nul 2>nul

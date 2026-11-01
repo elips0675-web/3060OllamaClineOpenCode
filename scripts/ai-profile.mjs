@@ -13,6 +13,7 @@
 //
 // Использование (из корня проекта):
 //   node <комплект>\scripts\ai-profile.mjs status
+//   node <комплект>\scripts\ai-profile.mjs verify local-q5
 //   node <комплект>\scripts\ai-profile.mjs local
 //   node <комплект>\scripts\ai-profile.mjs local-q5
 //   node <комплект>\scripts\ai-profile.mjs cloud
@@ -301,6 +302,7 @@ function usage() {
   cloud         ${PROFILES.cloud.title}
   cloud-ollama  ${PROFILES['cloud-ollama'].title}
   status        показать текущие настройки (по умолчанию)
+  verify        сверить живое состояние с профилем (только чтение)
 
 Флаги:
   --root <путь>    корень проекта (по умолчанию — текущий каталог)
@@ -312,6 +314,7 @@ function usage() {
 
 Примеры (из корня проекта):
   "${bat}" status
+  "${bat}" verify local-q5
   "${bat}" local
   "${bat}" cloud --dry-run
   node "${path.join(KIT_ROOT, 'scripts', 'ai-profile.mjs')}" status`)
@@ -416,7 +419,7 @@ function isVsCodeRunning() {
   })
 }
 
-async function openClineDb(env = process.env) {
+async function openClineDb(env = process.env, { readOnly = false } = {}) {
   const existing = clineDbCandidates(env).find((file) => existsSync(file))
   if (!existing) {
     warn('\nCline: не найден state.vscdb.')
@@ -428,7 +431,7 @@ async function openClineDb(env = process.env) {
     // В новых Node класс называется Database, DatabaseSync — устаревший алиас.
     const Database = sqlite.Database || sqlite.DatabaseSync
     if (!Database) throw new Error('в node:sqlite нет класса Database')
-    return { db: new Database(existing), file: existing }
+    return { db: readOnly ? new Database(existing, { readOnly: true }) : new Database(existing), file: existing }
   } catch (err) {
     warn(`\nCline: node:sqlite недоступен (${err.message}).`)
     warn('  Нужен Node.js 22.13+ (на 22.5-22.12 — с флагом --experimental-sqlite).')
@@ -567,6 +570,115 @@ async function status(root) {
   log(`\nПохоже на профиль: ${guess || 'не совпадает ни с одним (переключите явно)'}`)
 }
 
+// ---------------------------------------------------------------- проверка
+
+// Cline хранит base URL так, как его ввели; localhost и 127.0.0.1 — один адрес.
+const normalizeBaseUrl = (value) =>
+  String(value ?? '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/^http:\/\/localhost(?=[:/]|$)/i, 'http://127.0.0.1')
+
+export function verifyProfileState(profile, { cline = {}, opencode = null, tags = null } = {}) {
+  const checks = []
+  for (const [key, expected] of Object.entries(clinePatch(profile))) {
+    const actual = cline[key]
+    const compare = key === 'ollamaBaseUrl' ? normalizeBaseUrl : (v) => String(v ?? '')
+    checks.push({
+      scope: 'cline',
+      name: key,
+      expected: String(expected),
+      actual: actual === undefined ? '—' : String(actual),
+      ok: compare(actual) === compare(expected),
+    })
+  }
+
+  if (opencode) {
+    const model = resolveOpencodeModel(profile, tags)
+    checks.push({
+      scope: 'opencode',
+      name: 'model',
+      expected: model,
+      actual: opencode.model || '—',
+      ok: opencode.model === model,
+    })
+    checks.push({
+      scope: 'opencode',
+      name: 'default_agent',
+      expected: profile.opencode.agent,
+      actual: opencode.default_agent || '—',
+      ok: opencode.default_agent === profile.opencode.agent,
+    })
+  }
+
+  const failed = checks.filter((c) => !c.ok)
+  return { ok: failed.length === 0, checks, failed }
+}
+
+async function verify(root, profileName, flags) {
+  const tags = await ollamaTags()
+  const opencodeFile = path.join(root, 'opencode.json')
+  let opencode = null
+  if (existsSync(opencodeFile) && !flags.has('--cline-only')) {
+    try {
+      opencode = JSON.parse(readFileSync(opencodeFile, 'utf8'))
+    } catch (err) {
+      warn(`✗ ${opencodeFile} не разбирается как JSON: ${err.message}`)
+      return 2
+    }
+  }
+
+  let cline = {}
+  if (!flags.has('--opencode-only')) {
+    const opened = await openClineDb(process.env, { readOnly: true })
+    if (opened) {
+      try {
+        cline = readCline(opened.db)
+      } finally {
+        opened.db.close()
+      }
+    }
+  }
+
+  const clineModel = cline.ollamaModelId || cline.apiModelId || null
+  const name = profileName || matchProfile({ opencodeModel: opencode?.model, clineModel })
+  if (!name) {
+    warn('✗ Не удалось определить профиль по живому состоянию.')
+    warn('  Укажите его явно: switch-ai.bat verify local-q5')
+    return 2
+  }
+  const profile = PROFILES[name]
+  if (!profile) {
+    warn(`✗ Неизвестный профиль: ${name}`)
+    usage()
+    return 2
+  }
+
+  log(`Профиль для сверки: ${name} — ${profile.title}`)
+  const result = verifyProfileState(profile, { cline, opencode, tags })
+
+  for (const scope of ['cline', 'opencode']) {
+    const rows = result.checks.filter((c) => c.scope === scope)
+    if (!rows.length) continue
+    log(`\n${scope === 'cline' ? 'Cline (state.vscdb, только чтение)' : 'OpenCode (opencode.json)'}:`)
+    for (const row of rows) {
+      log(
+        row.ok
+          ? `  ✅ ${row.name} = ${row.actual}`
+          : `  ❌ ${row.name} = ${row.actual} (ожидалось ${row.expected})`,
+      )
+    }
+  }
+
+  if (result.ok) {
+    log(`\nИтог: совпадает с профилем ${name} ✓`)
+    return 0
+  }
+  warn(`\nИтог: расхождений ${result.failed.length} — профиль ${name} не применён целиком.`)
+  warn('  Cline читает состояние при старте: закройте VS Code, выполните переключение и откройте снова.')
+  return 1
+}
+
 async function main(argv) {
   let args
   try {
@@ -603,6 +715,10 @@ async function main(argv) {
   if (command === 'status') {
     await status(root)
     return 0
+  }
+
+  if (command === 'verify') {
+    return await verify(root, positional[1], flags)
   }
 
   const profile = PROFILES[command]

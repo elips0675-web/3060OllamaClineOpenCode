@@ -23,6 +23,7 @@ import {
   parseArgs,
   pickTag,
   resolveOpencodeModel,
+  verifyProfileState,
 } from './ai-profile.mjs'
 
 describe('профили', () => {
@@ -291,6 +292,100 @@ describe('запись Cline (интеграция, без живого VS Code)
       expect(readFileSync(path.join(project, 'opencode.json'), 'utf8')).toBe(
         JSON.stringify({ $schema: 'https://opencode.ai/config.json' }),
       )
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('сверка профиля (verify, только чтение)', () => {
+  const profile = PROFILES['local-q5']
+
+  it('считает совпадением localhost и 127.0.0.1 в base URL', () => {
+    const cline = { ...clinePatch(profile), ollamaBaseUrl: 'http://localhost:11434/' }
+    const result = verifyProfileState(profile, { cline })
+
+    expect(result.failed).toEqual([])
+    expect(result.ok).toBe(true)
+  })
+
+  it('показывает расхождение по модели и контексту', () => {
+    const cline = { ...clinePatch(profile), ollamaModelId: 'servicedesk-qwen', ollamaApiOptionsCtxNum: '8192' }
+    const result = verifyProfileState(profile, { cline })
+    const names = result.failed.map((row) => row.name)
+
+    expect(result.ok).toBe(false)
+    expect(names).toContain('ollamaModelId')
+    expect(names).toContain('ollamaApiOptionsCtxNum')
+    expect(result.failed.find((row) => row.name === 'ollamaModelId').expected).toBe(
+      'swiftmatch-coder-7b-q5',
+    )
+  })
+
+  it('сверяет opencode.json с точным тегом и агентом', () => {
+    const opencode = { model: 'ollama/swiftmatch-coder-7b-q5:latest', default_agent: 'local' }
+    const tags = ['swiftmatch-coder-7b-q5:latest']
+    const ok = verifyProfileState(profile, { cline: clinePatch(profile), opencode, tags })
+    const bad = verifyProfileState(profile, {
+      cline: clinePatch(profile),
+      opencode: { model: 'ollama/swiftmatch-coder-14b:latest', default_agent: 'cloud' },
+      tags,
+    })
+
+    expect(ok.ok).toBe(true)
+    expect(bad.failed.map((row) => `${row.scope}.${row.name}`)).toEqual([
+      'opencode.model',
+      'opencode.default_agent',
+    ])
+  })
+
+  it('через CLI: exit 0 после переключения и exit 1 на чужом состоянии', async () => {
+    let sqlite
+    try {
+      sqlite = await import('node:sqlite')
+    } catch {
+      return // Node без node:sqlite: интеграция неприменима
+    }
+    const Database = sqlite.Database || sqlite.DatabaseSync
+
+    const tmp = mkdtempSync(path.join(tmpdir(), 'ai-profile-verify-'))
+    const project = path.join(tmp, 'project')
+    mkdirSync(project)
+    writeFileSync(
+      path.join(project, 'opencode.json'),
+      JSON.stringify({ $schema: 'https://opencode.ai/config.json' }),
+      'utf8',
+    )
+
+    const dbFile = path.join(tmp, 'state.vscdb')
+    const db = new Database(dbFile)
+    db.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)')
+    db.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)').run(
+      'saoudrizwan.claude-dev',
+      Buffer.from(JSON.stringify({ apiModelId: 'servicedesk-qwen', ollamaModelId: 'servicedesk-qwen' }), 'utf8'),
+    )
+    db.close()
+
+    const script = path.join(KIT_ROOT, 'scripts', 'ai-profile.mjs')
+    const env = { ...process.env, CLINE_STATE_DB: dbFile, OLLAMA_URL: 'http://127.0.0.1:1' }
+    const run = (...args) =>
+      spawnSync(process.execPath, ['--no-warnings', script, ...args, '--root', project], {
+        encoding: 'utf8',
+        env,
+        timeout: 30000,
+      })
+
+    try {
+      const mismatch = run('verify', 'local-q5')
+      expect(mismatch.status, mismatch.stderr || mismatch.stdout).toBe(1)
+      expect(mismatch.stdout).toContain('servicedesk-qwen')
+
+      const applied = run('local-q5', '--force')
+      expect(applied.status, applied.stderr || applied.stdout).toBe(0)
+
+      const match = run('verify', 'local-q5')
+      expect(match.status, match.stderr || match.stdout).toBe(0)
+      expect(match.stdout).toContain('совпадает с профилем local-q5')
     } finally {
       rmSync(tmp, { recursive: true, force: true })
     }
