@@ -78,7 +78,25 @@ commands`, раздел «Model») `model` — опциональный ключ
 в TUI он должен применяться; `run` его игнорирует. Печатает ли `/next`
 карточку — по-прежнему интерактивная проверка.
 
-Статус: ⏳ (проверено 01.11.2026) (blocked: резолв команд подтверждён, строка `model:` в `run` не применяется; TUI — интерактивная проверка)
+Факт (01.11.2026, серверный маршрут вместо интерактивной проверки): проверено
+то, что раньше требовало TUI. Поднят `opencode-cli serve --port 4200` в
+`tmp/run04probe` (`opencode.json` с `model: ollama/swiftmatch-coder-14b:
+latest` + `.opencode/commands/probe.md` с `model: ollama/swiftmatch-coder-tiny:
+latest`), запросы через `tmp/run04probe/probe.mjs`:
+- `GET /api/command` → `init, review, goal, next-cloud, next, probe` — команды
+  из `.opencode/commands` регистрируются и попадают в список (TUI рисует `/`
+  именно по нему);
+- `POST /api/session/<id>/command` с `probe` → ответ от
+  `ollama/swiftmatch-coder-tiny:latest`;
+- контроль `POST /api/session/<id>/prompt` → ответ от
+  `ollama/swiftmatch-coder-14b:latest` из `opencode.json`.
+Значит `model:` в команде на этом маршруте применяется, а прежний вывод
+«model не применяется» — свойство только `opencode run`. Оговорка дописана в
+`08-Куда-писать-команды.txt` §3.3.
+Не проверено: как TUI отрисовывает список и карточку (шрифт, отсутствие ошибок)
+— это остаётся человеку.
+
+Статус: ⏳ (проверено 01.11.2026) (blocked: механика доказана через серверный маршрут — список команд и применение `model:`; за человеком только отрисовка в живом TUI)
 
 ## 🟡 Проверки на домашнем ПК (P2)
 
