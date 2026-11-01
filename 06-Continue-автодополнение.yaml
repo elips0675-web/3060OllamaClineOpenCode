@@ -27,6 +27,7 @@ models:
 
   - name: Qwen2.5-Coder 7B (замена 14B, только когда 14B выгружен)
     provider: ollama
+    # если ставили пункт [5] (7B q5_K_M), здесь нужен swiftmatch-coder-7b-q5
     model: swiftmatch-coder-7b
     apiBase: http://localhost:11434
     roles:
