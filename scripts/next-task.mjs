@@ -522,7 +522,7 @@ export function phasesFor(item) {
     {
       name: 'ПРОВЕРКА',
       target: 'local',
-      text: 'гейты exit 0; красный гейт — в облако, а не «ещё разок»',
+      text: 'гейты проекта из его package.json, exit 0; красный гейт — в облако, а не «ещё разок»',
     },
   ]
 }
@@ -607,6 +607,7 @@ function printHelp() {
     '  node scripts/next-task.mjs --allow-no-evidence   и пункты без цитаты кода',
     '  node scripts/next-task.mjs --out tmp/next-task.txt  сохранить карточку в файл',
     '  node scripts/next-task.mjs --backlog <путь>      другой файл бэклога',
+    '  node scripts/next-task.mjs --root <путь>         корень проекта для гейтов (по умолчанию — текущий каталог)',
     '',
     'Статусы: ready (брать), blocked (владелец/ключи/маркер), watch (не делать сейчас),',
     '         closed (закрыт), decision (принятое решение/маркер), no-evidence (нет file:line).',
@@ -635,6 +636,7 @@ function parseArgs(argv) {
     else if (arg === '--id') options.id = next()
     else if (arg === '--out') options.out = next()
     else if (arg === '--backlog') options.backlog = next()
+    else if (arg === '--root') options.root = next()
     else {
       process.stderr.write(`Неизвестный аргумент: ${arg}\n`)
       return { error: true }
@@ -721,7 +723,12 @@ function main() {
     process.exit(0)
   }
 
-  const project = projectCommands()
+  const projectRoot = options.root
+    ? path.resolve(options.root)
+    : fs.existsSync(path.join(process.cwd(), 'package.json'))
+      ? process.cwd()
+      : ROOT
+  const project = projectCommands(projectRoot)
   const payload = options.json ? JSON.stringify({ task, route: routeFor(task), phases: phasesFor(task), gates: gatesFor(task, project), card: buildCard(task, project) }, null, 2) : buildCard(task, project)
   if (options.out) {
     const outPath = path.resolve(ROOT, options.out)

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import {
   buildCard,
   classifySection,
@@ -9,6 +12,7 @@ import {
   phasesFor,
   phasesText,
   pickTask,
+  projectCommands,
   readBacklogFile,
   resolveBarePaths,
   routeFor,
@@ -357,6 +361,20 @@ describe('gatesFor с реальным package.json', () => {
     const card = buildCard(byId(items, 'QA-01'), { ...kit, root: 'D:/project' })
     expect(card).toContain('Работаем с проектом project в D:/project')
     expect(card).not.toContain('SwiftMatch')
+  })
+
+  it('--root: гейты берутся из package.json проекта, а не комплекта', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'next-task-root-'))
+    writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ scripts: { lint: 'eslint .' }, devDependencies: { eslint: '^9.0.0' } }),
+    )
+    const project = projectCommands(dir)
+    expect(project.scripts.lint).toBe('eslint .')
+    const card = buildCard(byId(items, 'QA-01'), project)
+    expect(card).toContain('npx.cmd eslint <изменённые файлы>')
+    expect(card).not.toContain('test/build-pack.mjs')
+    expect(card).not.toContain('check:backlog')
   })
 })
 

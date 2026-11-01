@@ -197,6 +197,7 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
       node scripts/next-task.mjs --id QA-01          конкретный пункт
       node scripts/next-task.mjs --json              машинный вывод
       node scripts/next-task.mjs --out tmp\next-task.txt   карточку в файл
+      node scripts/next-task.mjs --root <путь>       гейты из package.json проекта
       node scripts/next-task.mjs --queue-only        только «Очередь этапов»
       node scripts/next-task.mjs --include-blocked   разрешить blocked
       node scripts/next-task.mjs --allow-no-evidence разрешить без file:line
