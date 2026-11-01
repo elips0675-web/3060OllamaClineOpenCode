@@ -5,7 +5,7 @@
 Как читать: тесты — это спецификация в исполняемом виде. Если утверждение в документации не покрыто тестом, считайте его заявлением, а не фактом.
 
 Состав (9 файлов, порядок = порядок в файле):
-   1. scripts/next-task.test.mjs — 28105 байт, 627 строк
+   1. scripts/next-task.test.mjs — 28611 байт, 639 строк
    2. scripts/agent-live.test.mjs — 33789 байт, 780 строк
    3. scripts/backlog.test.mjs — 10011 байт, 272 строк
    4. scripts/ai-profile.test.mjs — 11579 байт, 299 строк
@@ -20,7 +20,7 @@
 ================================================================================
 
 ================================================================================
-ФАЙЛ: scripts/next-task.test.mjs  (28105 байт, 627 строк)
+ФАЙЛ: scripts/next-task.test.mjs  (28611 байт, 639 строк)
 ================================================================================
 
 import { describe, expect, it } from 'vitest'
@@ -304,6 +304,18 @@ describe('pickTask', () => {
     expect(picked.id).toBe('QA-01')
     expect(picked.files.length).toBeLessThanOrEqual(3)
     expect(picked.status).toBe('ready')
+  })
+
+  it('--local не берёт пункт из семи файлов: это бюджет облака (RUN-06)', () => {
+    const sevenFiles = Array.from({ length: 7 }, (_, index) => ({ path: `src/file${index}.ts` }))
+    const seven = {
+      ...byId(items, 'QA-01'),
+      title: 'Проверить ESLint',
+      body: 'Проверить ESLint',
+      files: sevenFiles,
+    }
+    expect(pickTask([seven], { local: true })).toBe(null)
+    expect(routeFor(seven).reason).toBe('too-many-files')
   })
 
   it('детерминирован: два вызова дают один результат', () => {

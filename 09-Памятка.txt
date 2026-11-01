@@ -89,8 +89,11 @@
   «Брать нечего» ......... все пункты закрыты/заблокированы -> --list
   Модель думает 5 минут .. не влезла в VRAM: ollama ps, num_ctx 8192
   Стало 3-5 ток/с ........ в VRAM 14B + 7B: ollama stop swiftmatch-coder-7b
-  Браузер + 14B = тормоза  ОЗУ 16 ГБ: ollama stop swiftmatch-coder-14b (вернёт
-                           и VRAM, и ОЗУ); KEEP_ALIVE 5m вместо 30m из 02
+  «Браузер + 14B = тормоза» ОЗУ 16 ГБ: ollama stop swiftmatch-coder-14b (вернёт
+                            и VRAM, и ОЗУ). KEEP_ALIVE 5m — временная мера на
+                            сессию: `setx OLLAMA_KEEP_ALIVE 5m`, перезапуск
+                            Ollama. Штатный дефолт — 30m из 02 (модель целиком
+                            на GPU, холодная загрузка ~9.6 с).
   Cline: «model not found» . ollama ps, curl localhost:11434/api/tags
   /next не видна .......... нет .opencode/commands/next.md -> перезапустить
                            opencode (команды читаются при старте)

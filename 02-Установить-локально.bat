@@ -22,6 +22,8 @@ set "OLLAMA_FLASH_ATTENTION=1"
 set "OLLAMA_KV_CACHE_TYPE=q8_0"
 set "OLLAMA_MAX_LOADED_MODELS=2"
 set "OLLAMA_NUM_PARALLEL=1"
+rem 30m — штатный дефолт: модель целиком на GPU, холодная загрузка ~9.6 с.
+rem 5m — временная мера при нехватке ОЗУ (см. 09-Памятка.txt), не второй дефолт.
 set "OLLAMA_KEEP_ALIVE=30m"
 setx OLLAMA_FLASH_ATTENTION 1 >nul
 setx OLLAMA_KV_CACHE_TYPE q8_0 >nul

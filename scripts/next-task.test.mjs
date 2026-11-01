@@ -281,6 +281,18 @@ describe('pickTask', () => {
     expect(picked.status).toBe('ready')
   })
 
+  it('--local не берёт пункт из семи файлов: это бюджет облака (RUN-06)', () => {
+    const sevenFiles = Array.from({ length: 7 }, (_, index) => ({ path: `src/file${index}.ts` }))
+    const seven = {
+      ...byId(items, 'QA-01'),
+      title: 'Проверить ESLint',
+      body: 'Проверить ESLint',
+      files: sevenFiles,
+    }
+    expect(pickTask([seven], { local: true })).toBe(null)
+    expect(routeFor(seven).reason).toBe('too-many-files')
+  })
+
   it('детерминирован: два вызова дают один результат', () => {
     const first = pickTask(parseBacklog(FIXTURE))
     const second = pickTask(parseBacklog(FIXTURE))

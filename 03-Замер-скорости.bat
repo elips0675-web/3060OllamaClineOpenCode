@@ -17,11 +17,11 @@ echo.
 
 call :bench swiftmatch-coder-14b
 echo.
-echo  Выгружаю 14B из VRAM, чтобы 7B не легла поверх неё (14B + 7B = 17.6 ГБ > 12).
+echo  Выгружаю 14B из VRAM, чтобы 7B не легла поверх неё (14B + 7B = 17.6 ГБ ^> 12).
 ollama stop swiftmatch-coder-14b >nul 2>nul
 call :bench swiftmatch-coder-7b
 echo.
-echo  Выгружаю 7B q8: 7B q8 + 7B q5 = ~14 ГБ > 12.
+echo  Выгружаю 7B q8: 7B q8 + 7B q5 = ~14 ГБ ^> 12.
 ollama stop swiftmatch-coder-7b >nul 2>nul
 call :bench swiftmatch-coder-7b-q5
 
@@ -42,7 +42,10 @@ exit /b 0
 
 :bench
 set "HAVE="
-for /f "tokens=1" %%m in ('ollama list 2^>nul') do if /i "%%m"=="%~1" set "HAVE=1"
+for /f "tokens=1" %%m in ('ollama list 2^>nul') do (
+  if /i "%%m"=="%~1" set "HAVE=1"
+  if /i "%%m"=="%~1:latest" set "HAVE=1"
+)
 if not defined HAVE (
   echo   [пропуск] %~1 не установлена
   goto :eof
