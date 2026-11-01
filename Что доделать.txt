@@ -29,8 +29,8 @@
 Только после BLK-02 добавить `model: ollama/<точный ID>` в шапку
 `.opencode/commands/next.md` проекта (для `/next-cloud` — облачная модель).
 Файла нет ни в комплекте, ни в проекте (проверено 30.10.2026: каталога
-`.opencode` в `E:\Tickets Cursor nout\repo` нет). Сначала создать команду,
-потом вписывать ID; строка `model` без проверки — запрещена.
+`.opencode` в проекте нет). Сначала создать команду, потом вписывать ID;
+строка `model` без проверки — запрещена.
 
 Факт (01.11.2026): ID для вписывания есть — `ollama/swiftmatch-coder-14b:latest`,
 `ollama/swiftmatch-coder-7b-q5:latest`, `ollama/swiftmatch-coder-tiny:latest`;
