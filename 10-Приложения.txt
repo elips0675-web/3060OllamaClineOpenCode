@@ -190,8 +190,8 @@ opencode.json и scripts/next-task.mjs. Здесь они приведены ц�
 
 4. SCRIPTS/NEXT-TASK.MJS: КОНТРАКТ ВЫБОРА ЗАДАЧИ
 
-  Файл: scripts/next-task.mjs (597 строк) + scripts/next-task.test.mjs
-  (46 тестов). Источник правды — репозиторий проекта; в комплекте лежит
+  Файл: scripts/next-task.mjs (758 строк) + scripts/next-task.test.mjs
+  (77 тестов). Источник правды — репозиторий проекта; в комплекте лежит
   снимок (30.10.2026) плюс package.json с командой test:next, так что
   поведение можно прогнать здесь же: npm.cmd run test:next.
 

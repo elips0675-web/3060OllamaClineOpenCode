@@ -428,7 +428,10 @@ const RISK_DOMAINS = [
   {
     code: 'access',
     label: 'доступ и секреты',
-    pattern: /jwt|oauth|\bauth\b|csrf|adminauth|секрет|\bтокен|уязвим|\bidor\b|rate.?limit|парол|sanitiz|xss|sql-?инъекц/iu,
+    pattern: /jwt|oauth|\bauth\b|csrf|adminauth|секрет|\bтокен|уязвим|\bidor\b|rate.?limit|парол|sanitiz|xss|sql-?инъекц|\b2fa\b|\.env\b/iu,
+    // В тексте «auth-2fa» — имя чужого теста, а не работа с доступом; в путях
+    // файлов дефис наоборот нормален (`auth-refresh.ts`), там работает pattern.
+    prose: /jwt|oauth|(?<![\w-])auth(?![\w-])|csrf|adminauth|секрет|\bтокен|уязвим|\bidor\b|rate.?limit|парол|sanitiz|xss|sql-?инъекц|(?<![\w-])2fa(?![\w-])|\.env\b/iu,
   },
   {
     code: 'schema',
@@ -443,8 +446,19 @@ const RISK_DOMAINS = [
 ]
 
 export function riskyDomain(item) {
-  const haystack = [item.title, item.body, item.section || '', ...item.files.map((file) => file.path)].join('\n')
-  return RISK_DOMAINS.find((domain) => domain.pattern.test(haystack)) || null
+  // Заголовок раздела — контекст всего раздела, а не текст пункта: «миграции
+  // идемпотентные» в названии раздела помечало schema все 8 пунктов NEW-*
+  // (факт RUN-02, 01.11.2026). Из обратных кавычек убираем только не-файлы:
+  // `auth-2fa` — имя чужого теста, а `.env` и `auth.json` — реальные файлы.
+  const prose = [item.title, item.body]
+    .join('\n')
+    .replace(/`([^`]*)`/g, (whole, inner) => (/\.(?:[a-z]{2,10})$/iu.test(inner.trim()) ? ` ${inner.trim()} ` : ' '))
+  const paths = item.files.map((file) => file.path).join('\n')
+  return (
+    RISK_DOMAINS.find(
+      (domain) => (domain.prose || domain.pattern).test(prose) || domain.pattern.test(paths),
+    ) || null
+  )
 }
 
 export function routeFor(item) {

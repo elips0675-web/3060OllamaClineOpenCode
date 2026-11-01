@@ -479,6 +479,34 @@ describe('routeFor', () => {
     const route = routeFor(withText('QA-01', 'Stripe checkout'))
     expect(route.text).toContain('сложность он не оценивает')
   })
+
+  it('заголовок раздела не делает риск: «миграции» в названии раздела не повод', () => {
+    const item = {
+      ...byId(items, 'QA-01'),
+      title: 'Кнопка клонирования тикета',
+      body: 'Кнопка клонирования тикета',
+      section: 'Чего НЕТ (новые фичи, миграции идемпотентные)',
+      files: [{ path: 'src/pages/Tickets.tsx' }],
+    }
+    expect(routeFor(item).target).toBe('local')
+  })
+
+  it('имя чужого теста в тексте не считается: «как в auth-2fa» это не доступ', () => {
+    const item = {
+      ...byId(items, 'QA-01'),
+      title: 'Слепое состояние флага (как в auth-2fa)',
+      body: 'Проверить off-состояние через vi.mock',
+      files: [{ path: 'src/hooks/useFeature.ts' }],
+    }
+    expect(routeFor(item).target).toBe('local')
+  })
+
+  it('2FA и .env — доступ, даже если слова нет в старом списке', () => {
+    const twofa = { ...byId(items, 'QA-01'), title: 'admin без 2FA отдаёт 403 2FA_REQUIRED', body: '', files: [{ path: 'server/src/routes/admin.js' }] }
+    const env = { ...byId(items, 'QA-01'), title: 'Паритет .env и .env.example', body: '', files: [{ path: 'scripts/check-env-parity.mjs' }] }
+    expect(routeFor(twofa).reason).toBe('access')
+    expect(routeFor(env).reason).toBe('access')
+  })
 })
 
 describe('phasesFor', () => {
