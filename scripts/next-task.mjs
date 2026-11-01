@@ -481,6 +481,58 @@ export function routeFor(item) {
   }
 }
 
+export function phasesFor(item) {
+  const count = item.files.length
+  const risk = riskyDomain(item)
+
+  if (item.evidence !== 'file:line') {
+    return [
+      {
+        name: 'ФАКТЫ',
+        target: 'cloud',
+        text: 'облако: нет цитаты file:line — сначала факты и план, потом правка',
+      },
+    ]
+  }
+
+  const plan =
+    count > 1 || risk
+      ? {
+          name: 'ПЛАН',
+          target: 'cloud',
+          text: `облако: implementation_plan.md на ${count} файл(ов), шаг = файл + точная правка + гейт`,
+        }
+      : {
+          name: 'ПЛАН',
+          target: 'local',
+          text: '3060: один файл — план не нужен, сразу шаг',
+        }
+
+  const step = risk
+    ? {
+        name: 'ШАГ',
+        target: 'cloud',
+        text: `облако: правка в риск-домене (${risk.label}) — 14B ошибается молча`,
+      }
+    : { name: 'ШАГ', target: 'local', text: '3060: один шаг плана за подход, один файл' }
+
+  return [
+    plan,
+    step,
+    {
+      name: 'ПРОВЕРКА',
+      target: 'local',
+      text: 'гейты exit 0; красный гейт — в облако, а не «ещё разок»',
+    },
+  ]
+}
+
+export function phasesText(item) {
+  return phasesFor(item)
+    .map((phase) => `${phase.name}: ${phase.text}`)
+    .join('; ')
+}
+
 export function buildCard(item, project = null) {
   const ordered = sortFilesForSlice(item.files)
   const slice = ordered.length ? ordered[0].path : ''
@@ -494,6 +546,7 @@ export function buildCard(item, project = null) {
   out.push(`Цитата кода: ${item.evidence === 'file:line' ? 'да (file:line)' : item.evidence === 'file' ? 'только путь, без строки' : 'нет'}`)
   out.push(`Файлов в пункте: ${item.files.length}`)
   out.push(`Маршрут: ${routeFor(item).text}`)
+  out.push(`Фазы: ${phasesText(item)}`)
   out.push('='.repeat(80))
   out.push('')
   out.push('СУТЬ')
@@ -664,11 +717,12 @@ function main() {
   if (options.route) {
     const route = routeFor(task)
     process.stdout.write(`${route.target}\t${route.text}\n`)
+    phasesFor(task).forEach((phase) => process.stdout.write(`  ${phase.name} (${phase.target}): ${phase.text}\n`))
     process.exit(0)
   }
 
   const project = projectCommands()
-  const payload = options.json ? JSON.stringify({ task, route: routeFor(task), gates: gatesFor(task, project), card: buildCard(task, project) }, null, 2) : buildCard(task, project)
+  const payload = options.json ? JSON.stringify({ task, route: routeFor(task), phases: phasesFor(task), gates: gatesFor(task, project), card: buildCard(task, project) }, null, 2) : buildCard(task, project)
   if (options.out) {
     const outPath = path.resolve(ROOT, options.out)
     fs.mkdirSync(path.dirname(outPath), { recursive: true })

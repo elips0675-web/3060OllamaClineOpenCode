@@ -6,6 +6,8 @@ import {
   gatesFor,
   listRows,
   parseBacklog,
+  phasesFor,
+  phasesText,
   pickTask,
   readBacklogFile,
   resolveBarePaths,
@@ -458,6 +460,62 @@ describe('routeFor', () => {
   it('облачный маршрут честно говорит, что это ключевые слова, а не оценка сложности', () => {
     const route = routeFor(withText('QA-01', 'Stripe checkout'))
     expect(route.text).toContain('сложность он не оценивает')
+  })
+})
+
+describe('phasesFor', () => {
+  const items = parseBacklog(FIXTURE)
+  const one = { ...byId(items, 'QA-01'), files: [{ path: 'src/a.ts' }] }
+  const seven = { ...one, files: Array.from({ length: 7 }, (_, index) => ({ path: `src/f${index}.ts` })) }
+  const money = {
+    ...one,
+    title: 'Вернуть деньги за подписку Stripe',
+    body: 'Вернуть деньги за подписку Stripe',
+  }
+
+  it('один файл без риска: все фазы локальные', () => {
+    expect(phasesFor(one).map((phase) => [phase.name, phase.target])).toEqual([
+      ['ПЛАН', 'local'],
+      ['ШАГ', 'local'],
+      ['ПРОВЕРКА', 'local'],
+    ])
+  })
+
+  it('несколько файлов: план пишет облако, шаги исполняет 3060', () => {
+    const phases = phasesFor(byId(items, 'QA-01'))
+    expect(phases[0]).toMatchObject({ name: 'ПЛАН', target: 'cloud' })
+    expect(phases[0].text).toContain('implementation_plan.md')
+    expect(phases[1]).toMatchObject({ name: 'ШАГ', target: 'local' })
+  })
+
+  it('семь файлов больше не уводят правку в облако: облако пишет только план', () => {
+    const phases = phasesFor(seven)
+    expect(phases[0].target).toBe('cloud')
+    expect(phases[0].text).toContain('7 файл')
+    expect(phases[1].target).toBe('local')
+  })
+
+  it('правка в риск-домене переносит шаг в облако', () => {
+    const phases = phasesFor(money)
+    expect(phases[1]).toMatchObject({ name: 'ШАГ', target: 'cloud' })
+    expect(phases[1].text).toContain('платежи и деньги')
+  })
+
+  it('без цитаты file:line остаётся одна фаза — факты в облаке', () => {
+    const phases = phasesFor({ ...one, evidence: 'file' })
+    expect(phases).toHaveLength(1)
+    expect(phases[0]).toMatchObject({ name: 'ФАКТЫ', target: 'cloud' })
+  })
+
+  it('phasesText собирает фазы в одну строку карточки', () => {
+    const text = phasesText(byId(items, 'QA-01'))
+    expect(text).toContain('ПЛАН: облако')
+    expect(text).toContain('ШАГ: 3060')
+    expect(text).toContain('ПРОВЕРКА: гейты')
+  })
+
+  it('карточка печатает строку «Фазы» рядом с маршрутом', () => {
+    expect(buildCard(byId(items, 'QA-01'))).toContain('Фазы: ПЛАН: облако')
   })
 })
 
