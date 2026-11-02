@@ -1,3 +1,364 @@
 {
-  "runs": []
+  "runs": [
+    {
+      "id": "E-01",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-02",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: нет цитат file:line",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-03",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: нет цитат file:line",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-04",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 7,
+      "note": "opencode local14b: тест не добавлен в песочницу",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-05",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: ни правки, ни доказанного отказа",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-06",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: нет цитат file:line",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-07",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-08",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-09",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: нет цитат file:line",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-10",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode local14b: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T19:58:42.396Z"
+    },
+    {
+      "id": "E-01",
+      "pass": true,
+      "steps": 9,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-02",
+      "pass": true,
+      "steps": 4,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-03",
+      "pass": true,
+      "steps": 10,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-04",
+      "pass": true,
+      "steps": 18,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-05",
+      "pass": true,
+      "steps": 29,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-06",
+      "pass": true,
+      "steps": 6,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-07",
+      "pass": false,
+      "steps": 6,
+      "fabricated": 0,
+      "note": "opencode ds41: дубль подтверждён тестами, а не двумя местами кода",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-08",
+      "pass": false,
+      "steps": 9,
+      "fabricated": 4,
+      "note": "opencode ds41: цитата из документации/отчёта, а не из кода",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-09",
+      "pass": true,
+      "steps": 9,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-10",
+      "pass": true,
+      "steps": 11,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-01T20:14:15.327Z"
+    },
+    {
+      "id": "E-01",
+      "pass": false,
+      "steps": 8,
+      "fabricated": 0,
+      "note": "opencode ds41: нет ключевого факта: server/src/index.js",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-02",
+      "pass": false,
+      "steps": 3,
+      "fabricated": 1,
+      "note": "opencode ds41: выдуманные файлы: 1",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-03",
+      "pass": false,
+      "steps": 6,
+      "fabricated": 1,
+      "note": "opencode ds41: выдуманные файлы: 1",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-04",
+      "pass": false,
+      "steps": 8,
+      "fabricated": 0,
+      "note": "opencode ds41: тест не добавлен в песочницу",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-05",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode ds41: ни правки, ни доказанного отказа",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-06",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode ds41: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-07",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode ds41: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-08",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode ds41: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-09",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode ds41: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-10",
+      "pass": false,
+      "steps": 1,
+      "fabricated": 0,
+      "note": "opencode ds41: пустой/короткий ответ",
+      "reason": "",
+      "at": "2026-11-01T20:31:18.301Z"
+    },
+    {
+      "id": "E-01",
+      "pass": false,
+      "steps": 9,
+      "fabricated": 1,
+      "note": "opencode ds41: выдуманные файлы: 1",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-02",
+      "pass": false,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41: роут взят из теста, а не из кода регистрации",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-03",
+      "pass": true,
+      "steps": 11,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-04",
+      "pass": false,
+      "steps": 12,
+      "fabricated": 0,
+      "note": "opencode ds41: цитата из документации/отчёта, а не из кода",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-05",
+      "pass": true,
+      "steps": 18,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-06",
+      "pass": false,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41: цитата из документации/отчёта, а не из кода",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-07",
+      "pass": false,
+      "steps": 9,
+      "fabricated": 1,
+      "note": "opencode ds41: выдуманные файлы: 1",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-08",
+      "pass": false,
+      "steps": 14,
+      "fabricated": 1,
+      "note": "opencode ds41: цитата из документации/отчёта, а не из кода",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-09",
+      "pass": true,
+      "steps": 15,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-10",
+      "pass": true,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41",
+      "reason": "",
+      "at": "2026-11-02T16:48:58.615Z"
+    }
+  ]
 }
