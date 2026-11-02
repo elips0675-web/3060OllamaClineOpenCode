@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Offline coding-agent kit for RTX 3060: task selection, local/cloud switching and route (snapshot of SwiftMatch scripts)",
   "scripts": {
-    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs scripts/symbols.test.mjs scripts/scheduled-report.test.mjs scripts/gpu-temp.test.mjs",
+    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/agent-opencode.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs scripts/symbols.test.mjs scripts/scheduled-report.test.mjs scripts/gpu-temp.test.mjs",
     "test:retent": "vitest run scripts/retention-gate.test.mjs",
     "test:section": "vitest run scripts/stage-section.test.mjs",
     "stage:section": "node scripts/stage-section.mjs",
@@ -34,7 +34,8 @@
     "eval:prompt": "node scripts/agent-eval.mjs prompt",
     "eval:record": "node scripts/agent-eval.mjs record",
     "eval:score": "node scripts/agent-eval.mjs score",
-    "eval:live": "node scripts/agent-live.mjs"
+    "eval:live": "node scripts/agent-live.mjs",
+    "eval:opencode": "node scripts/agent-opencode.mjs"
   },
   "devDependencies": {
     "vitest": "^3.2.6"
