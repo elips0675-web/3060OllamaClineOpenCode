@@ -14,62 +14,6 @@
 
 ## 🟡 Сборки и модели (P1)
 
-### BLK-05 — Проверить автодополнение 1.5B
-По `06-Continue-автодополнение.yaml`: модель `swiftmatch-coder-tiny`
-(сборка из `models/Modelfile-tiny`), Tab принимает подсказку, 14B при этом
-не выгружается из VRAM.
-
-Факт (01.11.2026): конфиг сверен с сборкой — `model: swiftmatch-coder-tiny`,
-`contextLength: 4096`, `maxTokens: 128` против `num_ctx 4096` в
-`models/Modelfile-tiny:8`, совпадает. FIM через `/api/generate` (`raw`,
-токены `<|fim_prefix|>/<|fim_suffix|>/<|fim_middle|>`): тело функции
-дописано `return a - b;` за 2.5 с (холодная) и 217 мс (прогретая), поля
-интерфейса — по смыслу. `ollama ps` после запросов к обеим моделям: 14B
-9.3 ГБ + tiny 1.0 ГБ = 10.3 ГБ, обе живы — 14B не выгружается.
-
-Факт (01.11.2026, проверка машины): проверить Tab нечем — расширения Continue
-нет. В `%USERPROFILE%\.vscode\extensions` только `humao.rest-client-0.25.1` и
-`saoudrizwan.claude-dev-4.1.26`, каталога `%USERPROFILE%\.continue` нет
-(`Test-Path` = False). То есть до проверки Tab нужен ещё и шаг установки:
-поставить расширение Continue и создать `config.yaml` из
-`06-Continue-автодополнение.yaml`.
-Сделано 01.11.2026: `code --install-extension continue.continue --force` ->
-`continue.continue-2.0.0-win32-x64` в `~/.vscode/extensions`, конфиг скопирован
-в `~/.continue/config.yaml` (1410 байт, `swiftmatch-coder-tiny` с
-`contextLength: 4096`).
-
-Факт (01.11.2026, сборка 2.0.0 против схемы расширения): в конфиге был
-невалидный ключ. `config-yaml-schema.json` из
-`~/.vscode/extensions/continue.continue-2.0.0-win32-x64/` описывает верхний
-уровень как `name, version, schema, metadata, env, requestOptions, models,
-context, data, mcpServers, rules, prompts, docs` — `tabAutocompleteOptions`
-там нет, это поле `config.json`; `multilineCompletions` нет и в схеме модели.
-Настройки Tab по схеме живут в `models[].autocompleteOptions`
-(`debounceDelay`, `maxPromptTokens` и др.), и рантайм их читает:
-`{...DEFAULT_AUTOCOMPLETE_OPTS, ...config.tabAutocompleteOptions,
-...llm.autocompleteOptions}` (`out/extension.js`). Исправлено: блок
-`tabAutocompleteOptions` убран, `debounceDelay: 300` и `maxPromptTokens: 2048`
-перенесены в `autocompleteOptions` модели `swiftmatch-coder-tiny`,
-`multilineCompletions` выброшен (настройка IDE, не yaml). Живой конфиг
-перезаписан, копия — `config.yaml.bak-01.11.2026-autocompleteOptions`.
-Проверка обоих файлов (`tmp/blk05-config-validate.mjs`): ошибок 0.
-Оговорка: YAML разбирался упрощённым парсером — `yaml`/`js-yaml` в комплекте нет.
-Не проверено: подсказка Tab; VS Code запущен до правки, нужен
-`Developer: Reload Window` и человек.
-
-Факт (01.11.2026, шаг «Reload Window» выполнен автоматом): после правки
-`~/.continue/config.yaml` (mtime 21:27:33) VS Code был закрыт и запущен заново
-трижды (21:39:14, 21:39:55, 21:40:37 — см. каталоги `logs\20261101T2139*`), и
-Continue в этих окнах реально работал: `~/.continue/types/core/index.d.ts`
-перезаписан в 21:41:30, `index/globalContext.json` — в 21:41:31. То есть новый
-конфиг уже подхвачен, человеку осталось только нажать Tab в редакторе.
-
-Факт (01.11.2026, указание владельца): «автодополнение нужно». Вариант
-«закрыть как ненужное» исключён — пункт живёт до живого Tab, а не до решения
-об отказе.
-
-Статус: ⏳ (проверено 01.11.2026) (blocked: автодополнение владельцу нужно; Continue поставлен, конфиг приведён к схеме расширения и перезагружен вместе с VS Code; за человеком осталась только сама подсказка Tab — её нельзя нажать программно, а подмена «нажатия» синтетическим keystroke докажет лишь доставку клавиши, не принятие подсказки)
-
 ## 🟡 Маршрут «локально / облако» (P1)
 
 ## 🟡 Проверки на домашнем ПК (P2)
@@ -114,7 +58,22 @@ Continue в этих окнах реально работал: `~/.continue/type
 Порог 7/10 не взят: правки E-04/E-05 прошли проверку тестами, но ответы часто
 опираются на документацию, а не на код, и превышают лимит шагов.
 
-Статус: ⏳ (проверено 01.11.2026) (blocked: базовый балл снят машинно на OpenCode (4/10, порог не взят); остался либо прогон в Cline — нужен GUI и человек, либо решение владельца считать базой балл OpenCode)
+Факт (02.11.2026, правка правил по указанию самого пункта): причина провалов
+разобрана по записям прогона, а не на глаз — E-01/E-07 цитировали выдуманный
+файл, E-04/E-06/E-08 ссылались на `README`/`CHANGELOG`/`docs/*.md` вместо
+исходника. Правило «сначала править правила, а не браться за LoRA» применено:
+в `scripts/agent-eval.mjs` (`formatPrompt`) добавлены «доказательство — только
+исходный код» и «ссылайся только на файлы, которые сам открыл», то же внесено
+в `.clinerules` раздел 1, тест в `scripts/agent-eval.test.mjs` проверяет строку.
+
+Повторный замер после правки не снят: у `opencode/deepseek-v4.1-flash-free`
+исчерпана бесплатная квота — `~/.local/share/opencode/log/opencode.log`,
+`AI.Error: Free usage limit reached` на каждом шаге. Прогон с меткой `ds41b`
+после E-01 падал за 0.8 с с пустым выводом, поэтому он откачен из
+`evals/results.json` и удалён: это сбой провайдера, а не балл модели.
+Повторить: `npm run eval:opencode -- --root "E:\Tickets Cursor nout\repo" --model opencode/deepseek-v4.1-flash-free --tag ds41c --record`, затем `npm run eval:score -- --strict`.
+
+Статус: ⏳ (проверено 02.11.2026) (blocked: правило «только код» внесено, но замер после правки не снят — у free-модели кончилась квота; база остаётся 4/10 в `evals/opencode-ds41.json`)
 
 ## 🟡 Документация (P3)
 

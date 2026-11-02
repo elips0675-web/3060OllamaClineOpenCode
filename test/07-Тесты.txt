@@ -10,7 +10,7 @@
    3. scripts/backlog.test.mjs — 11809 байт, 317 строк
    4. scripts/ai-profile.test.mjs — 15315 байт, 394 строк
    5. scripts/project-brief.test.mjs — 9414 байт, 249 строк
-   6. scripts/agent-eval.test.mjs — 11648 байт, 346 строк
+   6. scripts/agent-eval.test.mjs — 11715 байт, 347 строк
    7. scripts/init-project.test.mjs — 8669 байт, 207 строк
    8. scripts/retention-gate.test.mjs — 6195 байт, 166 строк
    9. scripts/stage-section.test.mjs — 7010 байт, 165 строк
@@ -2523,7 +2523,7 @@ describe('CLI', () => {
 })
 
 ================================================================================
-ФАЙЛ: scripts/agent-eval.test.mjs  (11648 байт, 346 строк)
+ФАЙЛ: scripts/agent-eval.test.mjs  (11715 байт, 347 строк)
 ================================================================================
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -2582,6 +2582,7 @@ describe('задачи', () => {
     expect(text).toContain(TASKS[0].title)
     expect(text).toContain('Критерий pass:')
     expect(text).toContain('file:line')
+    expect(text).toContain('только исходный код')
     expect(text).toContain('Не проверено')
   })
 })
