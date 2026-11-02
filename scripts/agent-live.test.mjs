@@ -117,6 +117,28 @@ describe('проверка по файловой системе', () => {
     expect(check.fabricated).toBe(1)
   })
 
+  it('префикс даты в имени миграции не делает короткую цитату выдумкой', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-live-'))
+    mkdirSync(path.join(dir, 'server', 'migrations'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'server', 'migrations', '20260924_fk_cascades.js'),
+      'one\ntwo\n',
+      'utf8',
+    )
+    const check = checkCitations(dir, [{ path: 'fk_cascades.js', line: 2 }])
+    expect(check.fabricated).toBe(0)
+    expect(check.checked[0].resolved).toBe('server/migrations/20260924_fk_cascades.js')
+  })
+
+  it('файл из .github участвует в разрешении короткого пути', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-live-'))
+    mkdirSync(path.join(dir, '.github', 'workflows'), { recursive: true })
+    writeFileSync(path.join(dir, '.github', 'workflows', 'ci.yml'), 'one\ntwo\n', 'utf8')
+    const check = checkCitations(dir, [{ path: 'ci.yml', line: 1 }])
+    expect(check.fabricated).toBe(0)
+    expect(check.checked[0].resolved).toBe('.github/workflows/ci.yml')
+  })
+
   it('не выпускает за корень проекта', () => {
     const root = make()
     expect(() => safeResolve(root, '../secret.txt')).toThrow(/вне проекта/)

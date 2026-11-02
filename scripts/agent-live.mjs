@@ -150,7 +150,13 @@ function overlap(left, right) {
 
 function inventoryOf(root) {
   const base = path.resolve(root)
-  return walk(base, base).map((file) => path.relative(base, file).replace(/\\/g, '/'))
+  const files = walk(base, base)
+  // walk прячет каталоги с точкой, но .github/workflows — такой же код проекта:
+  // без него короткая цитата «ci.yml» считалась выдуманным файлом, хотя модель
+  // выше цитировала .github/workflows/ci.yml целиком.
+  const github = path.join(base, '.github')
+  if (existsSync(github)) files.push(...walk(base, github))
+  return files.map((file) => path.relative(base, file).replace(/\\/g, '/'))
 }
 
 export function checkCitations(root, citations, io = {}) {
@@ -159,7 +165,12 @@ export function checkCitations(root, citations, io = {}) {
   let inventory = io.inventory || null
   const resolveSuffix = (item) => {
     if (!inventory) inventory = inventoryOf(root)
-    const hits = inventory.filter((file) => file === item.path || file.endsWith(`/${item.path}`))
+    // Миграции и версии дают префикс в имени (20260924_fk_cascades.js), поэтому
+    // короткая цитата fk_cascades.js — тоже суффикс, а не выдумка. Уникальность
+    // по-прежнему обязательна: два одинаковых basename остаются неоднозначными.
+    const hits = inventory.filter(
+      (file) => file === item.path || file.endsWith(`/${item.path}`) || file.endsWith(item.path),
+    )
     return hits.length === 1 ? hits[0] : null
   }
   const checked = citations.map((item) => {

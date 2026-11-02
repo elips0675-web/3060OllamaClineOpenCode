@@ -6,7 +6,7 @@
 
 Состав (9 файлов, порядок = порядок в файле):
    1. scripts/next-task.test.mjs — 33463 байт, 743 строк
-   2. scripts/agent-live.test.mjs — 33789 байт, 780 строк
+   2. scripts/agent-live.test.mjs — 34913 байт, 802 строк
    3. scripts/backlog.test.mjs — 11809 байт, 317 строк
    4. scripts/ai-profile.test.mjs — 15315 байт, 394 строк
    5. scripts/project-brief.test.mjs — 9414 байт, 249 строк
@@ -767,7 +767,7 @@ describe('цитаты документов и имена без расшире�
 })
 
 ================================================================================
-ФАЙЛ: scripts/agent-live.test.mjs  (33789 байт, 780 строк)
+ФАЙЛ: scripts/agent-live.test.mjs  (34913 байт, 802 строк)
 ================================================================================
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -887,6 +887,28 @@ describe('проверка по файловой системе', () => {
     writeFileSync(path.join(dir, 'two', 'b.ts'), 'y\n', 'utf8')
     const check = checkCitations(dir, [{ path: 'b.ts', line: 1 }])
     expect(check.fabricated).toBe(1)
+  })
+
+  it('префикс даты в имени миграции не делает короткую цитату выдумкой', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-live-'))
+    mkdirSync(path.join(dir, 'server', 'migrations'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'server', 'migrations', '20260924_fk_cascades.js'),
+      'one\ntwo\n',
+      'utf8',
+    )
+    const check = checkCitations(dir, [{ path: 'fk_cascades.js', line: 2 }])
+    expect(check.fabricated).toBe(0)
+    expect(check.checked[0].resolved).toBe('server/migrations/20260924_fk_cascades.js')
+  })
+
+  it('файл из .github участвует в разрешении короткого пути', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'agent-live-'))
+    mkdirSync(path.join(dir, '.github', 'workflows'), { recursive: true })
+    writeFileSync(path.join(dir, '.github', 'workflows', 'ci.yml'), 'one\ntwo\n', 'utf8')
+    const check = checkCitations(dir, [{ path: 'ci.yml', line: 1 }])
+    expect(check.fabricated).toBe(0)
+    expect(check.checked[0].resolved).toBe('.github/workflows/ci.yml')
   })
 
   it('не выпускает за корень проекта', () => {

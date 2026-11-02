@@ -6,7 +6,7 @@
 
 Состав (3 файлов, порядок = порядок в файле):
    1. scripts/next-task.mjs — 31179 байт, 758 строк
-   2. scripts/agent-live.mjs — 39693 байт, 899 строк
+   2. scripts/agent-live.mjs — 40584 байт, 910 строк
    3. scripts/backlog.mjs — 13866 байт, 344 строк
 
 Ничего не переписано: ниже дословное содержимое перечисленных файлов,
@@ -776,7 +776,7 @@ function main() {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()
 
 ================================================================================
-ФАЙЛ: scripts/agent-live.mjs  (39693 байт, 899 строк)
+ФАЙЛ: scripts/agent-live.mjs  (40584 байт, 910 строк)
 ================================================================================
 
 // Живой прогон эвалов локальной моделью через Ollama API (tool calling).
@@ -931,7 +931,13 @@ function overlap(left, right) {
 
 function inventoryOf(root) {
   const base = path.resolve(root)
-  return walk(base, base).map((file) => path.relative(base, file).replace(/\\/g, '/'))
+  const files = walk(base, base)
+  // walk прячет каталоги с точкой, но .github/workflows — такой же код проекта:
+  // без него короткая цитата «ci.yml» считалась выдуманным файлом, хотя модель
+  // выше цитировала .github/workflows/ci.yml целиком.
+  const github = path.join(base, '.github')
+  if (existsSync(github)) files.push(...walk(base, github))
+  return files.map((file) => path.relative(base, file).replace(/\\/g, '/'))
 }
 
 export function checkCitations(root, citations, io = {}) {
@@ -940,7 +946,12 @@ export function checkCitations(root, citations, io = {}) {
   let inventory = io.inventory || null
   const resolveSuffix = (item) => {
     if (!inventory) inventory = inventoryOf(root)
-    const hits = inventory.filter((file) => file === item.path || file.endsWith(`/${item.path}`))
+    // Миграции и версии дают префикс в имени (20260924_fk_cascades.js), поэтому
+    // короткая цитата fk_cascades.js — тоже суффикс, а не выдумка. Уникальность
+    // по-прежнему обязательна: два одинаковых basename остаются неоднозначными.
+    const hits = inventory.filter(
+      (file) => file === item.path || file.endsWith(`/${item.path}`) || file.endsWith(item.path),
+    )
     return hits.length === 1 ? hits[0] : null
   }
   const checked = citations.map((item) => {
