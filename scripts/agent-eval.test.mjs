@@ -54,6 +54,7 @@ describe('задачи', () => {
     expect(text).toContain(TASKS[0].title)
     expect(text).toContain('Критерий pass:')
     expect(text).toContain('file:line')
+    expect(text).toContain('только исходный код')
     expect(text).toContain('Не проверено')
   })
 })
