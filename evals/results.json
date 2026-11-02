@@ -359,6 +359,186 @@
       "note": "opencode ds41",
       "reason": "",
       "at": "2026-11-02T16:48:58.615Z"
+    },
+    {
+      "id": "E-01",
+      "pass": false,
+      "steps": 8,
+      "fabricated": 0,
+      "note": "opencode ds41d: нет ключевого факта: server/src/index.js",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.231Z"
+    },
+    {
+      "id": "E-02",
+      "pass": true,
+      "steps": 4,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.231Z"
+    },
+    {
+      "id": "E-03",
+      "pass": true,
+      "steps": 10,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-04",
+      "pass": true,
+      "steps": 13,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-05",
+      "pass": true,
+      "steps": 16,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-06",
+      "pass": true,
+      "steps": 10,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-07",
+      "pass": true,
+      "steps": 10,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-08",
+      "pass": true,
+      "steps": 11,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-09",
+      "pass": true,
+      "steps": 14,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-10",
+      "pass": true,
+      "steps": 12,
+      "fabricated": 0,
+      "note": "opencode ds41d",
+      "reason": "",
+      "at": "2026-11-02T18:27:11.232Z"
+    },
+    {
+      "id": "E-01",
+      "pass": true,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-02",
+      "pass": true,
+      "steps": 3,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-03",
+      "pass": true,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-04",
+      "pass": true,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-05",
+      "pass": true,
+      "steps": 8,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-06",
+      "pass": true,
+      "steps": 5,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-07",
+      "pass": false,
+      "steps": 6,
+      "fabricated": 1,
+      "note": "opencode ds41e: выдуманные файлы: 1",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-08",
+      "pass": true,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-09",
+      "pass": false,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41e: цитаты не из схемы или миграции",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
+    },
+    {
+      "id": "E-10",
+      "pass": true,
+      "steps": 7,
+      "fabricated": 0,
+      "note": "opencode ds41e",
+      "reason": "",
+      "at": "2026-11-02T18:43:03.766Z"
     }
   ]
 }
