@@ -8,7 +8,7 @@
    1. .clinerules — 17999 байт, 221 строк
    2. AGENTS.md — 5113 байт, 90 строк
    3. switch-ai.bat — 610 байт, 18 строк
-   4. package.json — 2323 байт, 43 строк
+   4. package.json — 2411 байт, 44 строк
    5. models/Modelfile-14b-q4 — 402 байт, 11 строк
    6. models/Modelfile-14b-q6 — 409 байт, 11 строк
    7. models/Modelfile-7b-q5 — 541 байт, 12 строк
@@ -381,7 +381,7 @@ node --no-warnings "%SCRIPT%" %*
 endlocal
 
 ================================================================================
-ФАЙЛ: package.json  (2323 байт, 43 строк)
+ФАЙЛ: package.json  (2411 байт, 44 строк)
 ================================================================================
 
 {
@@ -391,7 +391,7 @@ endlocal
   "type": "module",
   "description": "Offline coding-agent kit for RTX 3060: task selection, local/cloud switching and route (snapshot of SwiftMatch scripts)",
   "scripts": {
-    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs scripts/symbols.test.mjs scripts/scheduled-report.test.mjs scripts/gpu-temp.test.mjs",
+    "test": "vitest run scripts/next-task.test.mjs scripts/ai-profile.test.mjs scripts/project-brief.test.mjs scripts/backlog.test.mjs scripts/agent-eval.test.mjs scripts/agent-live.test.mjs scripts/agent-opencode.test.mjs scripts/init-project.test.mjs scripts/retention-gate.test.mjs scripts/stage-section.test.mjs scripts/symbols.test.mjs scripts/scheduled-report.test.mjs scripts/gpu-temp.test.mjs",
     "test:retent": "vitest run scripts/retention-gate.test.mjs",
     "test:section": "vitest run scripts/stage-section.test.mjs",
     "stage:section": "node scripts/stage-section.mjs",
@@ -420,7 +420,8 @@ endlocal
     "eval:prompt": "node scripts/agent-eval.mjs prompt",
     "eval:record": "node scripts/agent-eval.mjs record",
     "eval:score": "node scripts/agent-eval.mjs score",
-    "eval:live": "node scripts/agent-live.mjs"
+    "eval:live": "node scripts/agent-live.mjs",
+    "eval:opencode": "node scripts/agent-opencode.mjs"
   },
   "devDependencies": {
     "vitest": "^3.2.6"
